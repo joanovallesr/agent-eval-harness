@@ -14,22 +14,35 @@ elsewhere and are not decided here.
 - Order: the sample order below is the frozen replacement order.
 - sha256 of `"\n".join(candidates)` (no trailing newline):
   `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`.
-- Generator code commit:
+- Phase-0 generator code commit (frozen order logic unchanged):
   `847a7de4c8e842087ed3a87c12d9b681ac57ce87` (`scripts/select_candidates.py`).
 
 ## Decision status (owner, 2026-10-26)
 
-1. **Required-arguments filter — INTERIM, not final.** "No `default` key =
-   required" is a documented **assumption/heuristic**, not a dataset rule. The
-   pinned revision has no `required` key anywhere, while the dataset card
-   describes a required flag; that card-vs-data discrepancy stays in the
-   record. The final rule depends on `docs/REQUIRED_FILTER_AUDIT.md` and owner
-   sign-off before pre-registration.
-2. **Sizing inputs `m` and `u` — INTERIM placeholder.** The planning baseline
-   keeps `m = 59` (71 eligible − 12 candidates) and `u = 1.090`. This is a
-   conservative placeholder only, **not** a final derived `m`. The final `m`
-   comes from the usable-cases rule in the EVAL_DESIGN §7 sensitivity table
-   before pre-registration.
+1. **Required-arguments filter — FINAL: description-aware refinement.**
+   Exclude only **core-input** missing rows. A missing parameter is **not** a
+   core input when (a) its name matches the filter/pagination/sort pattern or
+   (b) its description matches the optional/default-language pattern; the name
+   check has precedence. The exact regexes are stated verbatim in
+   `docs/REQUIRED_FILTER_AUDIT.md` and implemented once in
+   `scripts/select_candidates.py` (`categorize_parameter` /
+   `normalize_parameters`), which the audit imports. Measured on the pinned
+   revision: **38 excluded rows, 43 missing-parameter instances, final
+   eligible pool 70 tools**. The interim "no `default` key = required" rule
+   (1,316 rows, 63 tools) is **history only**, not the current rule. The
+   70 vs 71 structural difference is `integrate` falling 101 → 95 usable
+   cases; `integrate` is not a candidate. Candidate counts, frozen order,
+   seed 42, and sha256
+   `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`
+   are unchanged.
+2. **Sizing inputs `m` and `u` — FINAL as a rule, not a number.** `m` is the
+   count of dev tools (non-candidate tools) with **≥10 usable cases in the
+   actual Phase 3 dev sample**. `u` is recomputed from that `m` with the §7
+   formula `u = √((m−1)/χ²_{0.20, m−1})`. `m`, `u`, `C`, and `n_t` are **not
+   locked by this document**: the structural illustration `m = 1,093`,
+   `u = 1.019` is only an illustration of the full-dataset count, not a
+   Phase-3 value. Concrete `C` and `n_t` still require Phase 3 variance
+   components.
 3. **Gold-malformation exclusion — FINAL.** A missing/non-string tool name,
    non-object arguments, or string-encoded arguments excludes the row, counted
    before the split and reported. It is a pre-registered exclusion, **not** a
@@ -41,9 +54,8 @@ elsewhere and are not decided here.
 5. **Frozen order — FINAL.** The order is generated from the **71-tool
    structural pool** (before the required-arguments filter), seed 42, sha256
    `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`.
-   The 63-tool all-filter pool is **diagnostic only**; the order is **not**
-   re-rolled from it. All 12 candidates clear 100 single-tool cases under both
-   pools.
+   The final 70-tool usable pool is used for sizing, not to re-roll the order.
+   All 12 candidates clear 100 single-tool cases under both pools.
 
 ## Eligibility filters
 
@@ -60,22 +72,31 @@ Applied in this order, before the split is materialized:
    calls mix a candidate with a non-candidate are excluded and counted. Rows
    whose gold calls span more than one candidate tool are multi-tool and are
    not used in the v1 per-tool analysis.
-4. **Required-arguments filter — INTERIM heuristic, not a dataset rule.** Under
-   the interim heuristic, a gold call that omits a parameter with no `default`
-   key is excluded. Parameters use the pinned normalizer: in xLAM's flat map
-   `param -> {type, description, default?}`, a parameter without a `default`
-   is treated as required; a nested JSON-Schema `properties`/`required` form
-   is also handled defensively. The pinned revision has **168,870 flat tool
-   declarations and zero nested declarations**. The public card describes a
-   `required` boolean, but the pinned revision has **zero** `required` keys in
-   its 362,482 parameter descriptors. That discrepancy is preserved in
-   `docs/REQUIRED_FILTER_AUDIT.md`; "no default = required" is a documented
-   assumption, **not** the dataset's rule. Under this interim heuristic the
-   filter removes 1,316 rows globally (11 with entirely empty arguments where
-   required parameters exist) and **zero single-tool candidate rows**.
+4. **Required-arguments filter — FINAL (description-aware).** A gold call
+   that omits a parameter is excluded only when that parameter is a
+   **core input**. A missing parameter is not core when its name matches the
+   filter/pagination/sort pattern (`filter`, `filters`, `limit`, `offset`,
+   `page`, `per_page`, `sort`, `sort_by`, `order`, `order_by`, `descending`,
+   `ascending`, `skip`, `cursor`, `top`, as a whole name segment,
+   case-insensitive) or its description matches the optional/default-language
+   regex (`\boptional\b`, `\bdefaults?\b`,
+   `\bdefault\s+(?:is|to|values?)\b`,
+   `\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b`,
+   `\bnot\s+required\b`, `\bcan\s+be\b`, case-insensitive). The name check has
+   precedence. The exact rule is stated verbatim and implemented once in
+   `scripts/select_candidates.py`, imported by the audit. A parameter with a
+   literal `default` key is optional before this rule runs. The pinned
+   revision has **168,870 flat tool declarations and zero nested
+   declarations**; the public card describes a `required` boolean, but the
+   pinned revision has **zero** `required` keys in its 362,482 parameter
+   descriptors. That discrepancy is preserved in
+   `docs/REQUIRED_FILTER_AUDIT.md`. This final rule removes **38 rows**
+   globally (43 missing-parameter instances) and **zero single-tool candidate
+   rows**. The interim "no `default` key = required" heuristic (1,316 rows,
+   63 tools) is history only.
 5. **Eligibility floor.** A tool is eligible when it has **at least 100
-   single-tool cases** after filters 1–4 (under the interim heuristic) or,
-   for the structural pool, after filters 1–3.
+   single-tool cases** after filters 1–4 (under the final description-aware
+   rule) or, for the structural pool, after filters 1–3.
 
 Distractor exposure is not a filter. A candidate tool may appear in a dev
 row's `tools` list without being a gold answer; this is allowed, counted, and
@@ -92,21 +113,25 @@ reported below. It never triggers replacement.
 | Mixed candidate + non-candidate rows (excluded) | 1,270 |
 | Multi-tool rows spanning only candidate tools | 21 |
 | Multi-tool rows with no candidate tool | 19,157 |
-| Rows removed by the interim required-arguments filter | 1,316 |
-| Rows with empty arguments where required parameters exist | 11 |
+| Rows removed by the interim heuristic (historical) | 1,316 |
+| Rows removed by the FINAL description-aware rule | 38 |
+| Missing-parameter instances under the final rule | 43 |
 | **Eligible tools, structural pool (≥100 single-tool cases)** | **71** |
-| Eligible tools under the interim required-arguments heuristic | 63 |
+| **Eligible tools under the FINAL required-arguments rule** | **70** |
+| Eligible tools under the interim heuristic (historical) | 63 |
 
 **Frozen order — FINAL (owner, 2026-10-26).** The order is generated from the
-**71-tool structural pool** locked in Phase 0. The interim required-arguments
-heuristic yields a 63-tool all-filter pool; that pool is **diagnostic only**.
-The verifier recomputes both pools and asserts that the 12 candidate counts
-are **identical under both** (all clear 100). The order is not re-rolled from
-the 63-tool pool, because the candidate list was frozen before the
-required-arguments rule was settled and the instruction is explicitly not to
-re-roll candidates. If a candidate had lost cases to this filter, it would be
-flagged and a spare would cover it; none did. Dropping the filter entirely
-returns the pool to 71; no candidate count changes either way.
+**71-tool structural pool** locked in Phase 0. The final description-aware
+rule yields a **70-tool usable pool**; that pool is used for sizing, never to
+re-roll the order. The verifier recomputes both pools and asserts that the 12
+candidate counts are **identical under both** (all clear 100). The order is
+not re-rolled from the 70-tool pool, because the candidate list was frozen
+before the required-arguments rule was settled and the instruction is
+explicitly not to re-roll candidates. If a candidate had lost cases to this
+filter, it would be flagged and a spare would cover it; none did. The 70 vs
+71 difference is `integrate` falling 101 → 95 usable cases; `integrate` is not
+a candidate. Dropping the filter entirely returns the pool to 71; no candidate
+count changes either way. The interim 63-tool pool is history only.
 
 ## Frozen candidates (ordered)
 
@@ -130,20 +155,19 @@ non-candidate (dev-eligible). Distractor exposure is disclosed, not banned.
 | 11 | `auto_complete` | 106 | 74 | 74 |
 | 12 | `assess_diabetes_risk` | 127 | 264 | 255 |
 
-Every candidate clears the 100-case floor. The interim required-arguments
-heuristic removes zero candidate single-tool rows, so these counts are also the
-counts after **all** filters.
+Every candidate clears the 100-case floor. The final description-aware rule
+removes zero candidate single-tool rows, so these counts are also the counts
+after **all** filters.
 
-## Sizing inputs (interim placeholder)
+## Sizing inputs (final rule, numbers not yet locked)
 
-EVAL_DESIGN §7's planning baseline keeps **m = 59** (71 eligible tools minus
-the 12 frozen candidates) and **u = 1.090**. This is an interim, conservative
-placeholder only, **not** a final derived `m`: the final `m` must come from the
-usable-cases rule in the §7 sensitivity table (dev tools with at least the
-chosen number of usable single-tool cases; dev tools with exactly one usable
-case cannot estimate within-tool variance and are excluded from `m`). The owner
-picks that threshold before pre-registration. The old `m = 13` / `u ≈ 1.240`
-figures must not be carried over.
+`m` is the count of dev tools (non-candidate tools) with **≥10 usable cases in
+the actual Phase 3 dev sample**, and `u` is recomputed from that `m` with the
+§7 formula `u = √((m−1)/χ²_{0.20, m−1})`. This is the final sizing **rule**;
+`m`, `u`, `C`, and `n_t` are not locked here. The full-dataset structural
+illustration in EVAL_DESIGN §7 (`m = 1,093`, `u = 1.019`) is an illustration
+only, not a Phase-3 value. The old `m = 13` / `u ≈ 1.240` figures must not be
+carried over.
 
 ## Reproduce / verify
 
@@ -155,7 +179,8 @@ python scripts/select_candidates.py \
 ```
 
 The script loads the pinned revision, applies filters 1–4, computes both the
-structural 71-tool pool and the 63-tool all-filter pool, regenerates
+structural 71-tool pool and the 70-tool usable pool under the final
+description-aware rule, regenerates
 `random.Random(42).sample(sorted(structural_eligible_tools), 12)`, and
 asserts:
 
@@ -163,10 +188,10 @@ asserts:
 - its sha256 equals the value above;
 - the pinned revision has 168,870 flat declarations, zero nested declarations,
   and zero `required` keys in its 362,482 parameter descriptors;
-- the structural pool is 71 and the all-filter pool is 63;
-- the 12 candidate counts are identical under both pools, every candidate
-  clears the 100-case floor, and the interim required-arguments heuristic
-  removes no candidate single-tool rows.
+- the structural pool is 71 and the final usable pool is 70;
+- the final rule excludes 38 rows, and the 12 candidate counts are identical
+  under both pools, every candidate clears the 100-case floor, and the final
+  rule removes no candidate single-tool rows.
 
 It prints aggregates and tool names only. It never prints or writes a raw
 dataset row, query, answer, or full tool schema.
@@ -191,10 +216,9 @@ fallback applies. Distractor exposure never consumes a spare.
 ## What is not here
 
 - No raw xLAM rows, queries, answers, or full tool schemas.
-- No final required-arguments rule: the current one is an interim heuristic
-  pending `docs/REQUIRED_FILTER_AUDIT.md` and owner sign-off.
-- No final `m` or `u`: `m = 59`, `u = 1.090` is a placeholder pending the
-  EVAL_DESIGN §7 usable-cases sensitivity decision.
 - No license verdict: the publication rule is approved, the verdict is not.
+- No Phase-3 number for `m`, `u`, `C`, or `n_t`: decision 2 fixes the
+  **rule** (≥10 usable Phase-3 dev cases per dev tool), while the concrete
+  values require Phase 3 variance components.
 - No test-split materialization and no pre-registration file or tag.
 - No re-roll: the seed, order, and sha256 are frozen.

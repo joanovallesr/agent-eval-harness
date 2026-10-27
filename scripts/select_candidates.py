@@ -8,7 +8,9 @@ The frozen candidate order is::
 where ``eligible_tools`` are tools with at least 100 single-tool cases after
 the structural filters below. This script re-applies those filters to the
 pinned xLAM revision, regenerates the order, and asserts that it equals the
-frozen list and sha256. It prints aggregates and tool names only; it never
+frozen list and sha256. It also applies the FINAL description-aware
+required-arguments rule (owner decision 1) and asserts the 38-row exclusion
+and 70-tool usable pool. It prints aggregates and tool names only; it never
 prints or writes a raw dataset row, query, answer, or full tool schema.
 
 Run::
@@ -23,6 +25,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Literal
@@ -50,37 +53,118 @@ FROZEN_SHA256 = (
 )
 
 
+CATEGORY_OPTIONAL = "optional-by-description"
+CATEGORY_FILTER = "filter/pagination/sort"
+CATEGORY_CORE = "core-input"
+CATEGORY_ORDER = (CATEGORY_OPTIONAL, CATEGORY_FILTER, CATEGORY_CORE)
+
+# FINAL required-arguments rule (owner decision 1, 2026-10-26). These are the
+# exact lexical signals used to classify a missing parameter. They are a
+# deterministic text rule, not a judgement call.
+OPTIONAL_LANGUAGE = re.compile(
+    r"\boptional\b"
+    r"|\bdefaults?\b"
+    r"|\bdefault\s+(?:is|to|values?)\b"
+    r"|\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b"
+    r"|\bnot\s+required\b"
+    r"|\bcan\s+be\b",
+    re.IGNORECASE,
+)
+FILTER_OR_SORT_NAME = re.compile(
+    r"(?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|"
+    r"order|order_by|descending|ascending|skip|cursor|top)(?:$|_)",
+    re.IGNORECASE,
+)
+
+
+def categorize_parameter(name: str, description: str) -> str:
+    """Classify a missing parameter under the FINAL deterministic rule.
+
+    Fixed precedence:
+
+    1. the parameter name matches ``FILTER_OR_SORT_NAME`` -> filter/pagination/sort;
+    2. the parameter description matches ``OPTIONAL_LANGUAGE`` ->
+       optional-by-description;
+    3. otherwise -> core-input.
+
+    Only a core-input omission excludes a row. A literal ``default`` key is
+    handled before this function: such a parameter is optional by construction.
+    """
+    if FILTER_OR_SORT_NAME.search(name):
+        return CATEGORY_FILTER
+    if OPTIONAL_LANGUAGE.search(description):
+        return CATEGORY_OPTIONAL
+    return CATEGORY_CORE
+
+
+def _description_of(descriptor: object) -> str:
+    if not isinstance(descriptor, dict):
+        return ""
+    description = descriptor.get("description")
+    return description if isinstance(description, str) else ""
+
+
+def _core_required(
+    descriptors: dict, names: frozenset[str] | set[str]
+) -> frozenset[str]:
+    """Return the names that remain required under the final rule."""
+    return frozenset(
+        name
+        for name in names
+        if categorize_parameter(name, _description_of(descriptors.get(name)))
+        == CATEGORY_CORE
+    )
+
+
 @dataclass(frozen=True)
 class ParameterSpec:
-    """Normalized tool parameters.
+    """Normalized tool parameters under the FINAL required-arguments rule.
 
     xLAM revisions use a flat map ``param_name -> {type, description,
     default?}``. A nested JSON-Schema form (``type: object`` + ``properties``
     + ``required``) is also handled defensively; the pinned revision contains
-    zero nested declarations. A parameter without a ``default`` is treated as
-    required; a parameter with a ``default`` is optional.
+    zero nested declarations.
+
+    ``no_default`` is every parameter without a literal ``default`` key (the
+    evidence basis for the audit). ``required`` is the final subset of those
+    that are core inputs: a missing filter/pagination/sort parameter or a
+    parameter whose description documents a default/optional fallback is not a
+    required-argument failure.
     """
 
     form: Literal["flat", "nested", "unknown"]
     all_names: frozenset[str]
+    no_default: frozenset[str]
     required: frozenset[str]
 
 
 def normalize_parameters(tool: dict) -> ParameterSpec:
     parameters = tool.get("parameters")
     if not isinstance(parameters, dict):
-        return ParameterSpec("unknown", frozenset(), frozenset())
+        return ParameterSpec("unknown", frozenset(), frozenset(), frozenset())
 
     # Nested JSON Schema (not present in the pinned revision).
     if parameters.get("type") == "object" and isinstance(
         parameters.get("properties"), dict
     ):
         properties = parameters["properties"]
-        required = parameters.get("required")
+        declared = parameters.get("required")
+        declared = (
+            frozenset(declared) if isinstance(declared, list) else frozenset()
+        )
+        no_default = frozenset(
+            name
+            for name in declared
+            if not (
+                isinstance(properties.get(name), dict)
+                and "default" in properties[name]
+            )
+        )
         return ParameterSpec(
             "nested",
             frozenset(properties),
-            frozenset(required) if isinstance(required, list) else frozenset(),
+            no_default,
+            _core_required(properties, no_default),
         )
 
     # Flat xLAM form: each value is a parameter descriptor.
@@ -88,14 +172,21 @@ def normalize_parameters(tool: dict) -> ParameterSpec:
         isinstance(descriptor, dict) and "type" in descriptor
         for descriptor in parameters.values()
     ):
-        required = {
+        no_default = frozenset(
             name
             for name, descriptor in parameters.items()
             if "default" not in descriptor
-        }
-        return ParameterSpec("flat", frozenset(parameters), frozenset(required))
+        )
+        return ParameterSpec(
+            "flat",
+            frozenset(parameters),
+            no_default,
+            _core_required(parameters, no_default),
+        )
 
-    return ParameterSpec("unknown", frozenset(parameters), frozenset())
+    return ParameterSpec(
+        "unknown", frozenset(parameters), frozenset(), frozenset()
+    )
 
 
 @dataclass
@@ -122,8 +213,9 @@ class Report:
     # The frozen order is generated from this pool, because the candidate list
     # was locked before the required-argument filter was finalized.
     single_tool_counts: Counter = field(default_factory=Counter)
-    # Usable pool: single-tool counts after every filter, including required
-    # arguments. Candidate counts must be identical in both pools.
+    # Usable pool: single-tool counts after every filter, including the final
+    # required-arguments rule (core-input omissions only). Candidate counts
+    # must be identical in both pools.
     required_filtered_single_tool_counts: Counter = field(default_factory=Counter)
     candidate_single_tool_required_gaps: Counter = field(default_factory=Counter)
     distractor_all: Counter = field(default_factory=Counter)
@@ -217,6 +309,7 @@ def analyze(dataset) -> Report:
         for answer in answers:
             spec = normalize_parameters(tools[answer["name"]])
             arguments = answer["arguments"]
+            # Final rule: only a missing core input is a required-argument gap.
             if spec.required - set(arguments):
                 any_required_gap = True
             if not arguments and spec.required:
@@ -331,7 +424,7 @@ def main() -> int:
         f"{report.multi_tool_all_candidates}"
     )
     print(f"multi-tool no-candidate rows: {report.multi_tool_no_candidates}")
-    print(f"required-argument filter rows: {report.required_argument_rows}")
+    print(f"required-argument filter rows (final, core input): {report.required_argument_rows}")
     print(
         "empty-arguments-where-required rows: "
         f"{report.empty_arguments_where_required_rows}"
@@ -342,8 +435,8 @@ def main() -> int:
         f"{len(eligible_structural)}"
     )
     print(
-        "eligible tools after all filters, including required arguments: "
-        f"{len(eligible_after_all)}"
+        "eligible tools after all filters, including the final "
+        f"required-arguments rule: {len(eligible_after_all)}"
     )
     print(f"seed: {SEED}")
     print(f"regenerated candidates: {regenerated}")
@@ -367,9 +460,14 @@ def main() -> int:
         failures.append(
             f"structural eligible pool {len(eligible_structural)} != 71"
         )
-    if len(eligible_after_all) != 63:
+    if len(eligible_after_all) != 70:
         failures.append(
-            f"all-filter eligible pool {len(eligible_after_all)} != 63"
+            f"all-filter eligible pool {len(eligible_after_all)} != 70"
+        )
+    if report.required_argument_rows != 38:
+        failures.append(
+            "final required-argument filter rows "
+            f"{report.required_argument_rows} != 38"
         )
     if report.parameter_forms.get("flat") != 168_870:
         failures.append(

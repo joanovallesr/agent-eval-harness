@@ -176,8 +176,8 @@ it.
   distractor `tools`); a gold function name not present in the row's `tools`
   is excluded; an empty `answers` where a call is expected is excluded; a
   malformed gold call is excluded and counted (below); a gold call that omits
-  a required parameter is excluded under the **interim** required-arguments
-  heuristic (below).
+  a **core input** is excluded under the **final** required-arguments rule
+  (below).
 - **Malformed-gold exclusion — FINAL (owner, 2026-10-26).** A row is excluded
   when a gold call has a missing or non-string tool name, non-object
   arguments, or string-encoded arguments. The row is excluded **before** the
@@ -185,25 +185,33 @@ it.
   a score of 0. The pinned revision has **zero** such rows (defensive only):
   all 100,011 gold calls carry a string name and a JSON object in
   `arguments`.
-- **Required-arguments filter — INTERIM heuristic, not a dataset rule
-  (owner, 2026-10-26).** A gold call that omits a parameter with no `default`
-  key is excluded under the current heuristic. Parameters are normalized with
-  the pinned normalizer: xLAM's flat map
-  `param -> {type, description, default?}` treats a parameter without a
-  `default` as required, and a nested JSON-Schema `properties`/`required`
-  form is also handled defensively. The pinned revision has 168,870 flat tool
-  declarations and zero nested declarations. The public card describes a
-  `required` boolean, but the pinned revision has zero `required` keys in its
-  362,482 parameter descriptors. That card-vs-data discrepancy is preserved
-  in `docs/REQUIRED_FILTER_AUDIT.md`; "no default = required" is a documented
-  assumption, **not** the dataset's rule. Under this interim heuristic the
-  filter removes 1,316 rows (11 of them with entirely empty arguments where
-  required parameters exist); none of those rows are single-tool candidate
-  cases. The candidate counts therefore survive every filter unchanged.
-  Applying the interim filter before tool eligibility yields 63 eligible
-  tools; the frozen order is generated from the 71-tool structural pool and
-  is not re-rolled. The **final** rule is pending owner sign-off after
-  `docs/REQUIRED_FILTER_AUDIT.md`, before pre-registration.
+- **Required-arguments filter — FINAL: description-aware refinement (owner,
+  2026-10-26).** A gold call is excluded only when it omits a **core input**.
+  A missing parameter is not core when either condition holds, with the name
+  check taking precedence:
+  1. its name matches
+     `(?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|order|order_by|descending|ascending|skip|cursor|top)(?:$|_)`
+     (`re.IGNORECASE`); or
+  2. its description matches
+     `\boptional\b|\bdefaults?\b|\bdefault\s+(?:is|to|values?)\b|\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b|\bnot\s+required\b|\bcan\s+be\b`
+     (`re.IGNORECASE`).
+
+  Otherwise the parameter is a core input and the row is excluded. A
+  parameter with a literal `default` key is optional before this rule runs.
+  The rule is implemented once in `scripts/select_candidates.py`
+  (`categorize_parameter` / `normalize_parameters`) and imported by
+  `scripts/audit_required_filter.py`, so the audit and verifier cannot drift.
+  On the pinned revision it excludes **38 rows / 43 missing-parameter
+  instances** and yields a **70-tool** eligible pool. The pinned revision has
+  168,870 flat tool declarations and zero nested declarations; the public card
+  describes a `required` boolean, but the pinned revision has zero `required`
+  keys in its 362,482 parameter descriptors. That card-vs-data discrepancy is
+  preserved in `docs/REQUIRED_FILTER_AUDIT.md`. Candidate counts are
+  unchanged: the final rule removes zero single-tool candidate rows. The
+  frozen order is generated from the 71-tool structural pool and is not
+  re-rolled; the 70 vs 71 difference is `integrate` falling 101 → 95 usable
+  cases, and `integrate` is not a candidate. The interim "no `default` key =
+  required" heuristic (1,316 rows, 63 tools) is history only.
 - **Mixed cases are excluded and counted.** A case whose gold calls include
   both a candidate held-out tool and a non-candidate tool is excluded from
   the candidate counts; on the pinned revision that is 1,270 cases. A case
@@ -320,41 +328,46 @@ renaming it.)
     `u = √((m−1)/χ²_{0.20, m−1})`, **m = number of dev tools in the LOTO
     estimate**. χ²_{0.20, m−1} denotes the lower-20% quantile
     (P(X ≤ x) = 0.20), so this is an 80% upper confidence limit.
-    **m is no longer 13.** **Interim placeholder (decision 2, owner
-    2026-10-26):** the planning baseline keeps **m = 59** (71 eligible tools
-    minus the 12 candidates) and **u = 1.090**. This is a conservative
-    placeholder, **not** a value derived from a final usable-cases rule. The
-    final `m` must come from the usable-cases sensitivity table below and be
-    frozen in pre-registration; `u` is never inherited from a different `m`.
-    The old `u ≈ 1.240` at `m = 13` must not be carried over.
+    **m is no longer 13.** **Final rule (decision 2, owner 2026-10-26):** `m`
+    is the count of dev tools (non-candidate tools) with **≥10 usable cases in
+    the actual Phase 3 dev sample**, and `u` is recomputed from that `m` with
+    the formula above. `m`, `u`, `C`, and `n_t` are **not locked by this
+    document**. The structural illustration `m = 1,093`, `u = 1.019` in the
+    table below is the full-dataset count at the ≥10 threshold — an
+    illustration only, not a Phase-3 value. `u` is never inherited from a
+    different `m`. The old `u ≈ 1.240` at `m = 13` must not be carried over.
   - The power inequality uses s_pess. (Plugging the mixed LOTO SD straight
     in inflates s under the n_t rule below — small, but the components
     version is the right derivation.)
   - If τ̂² ≈ 0, use the 100-case floor for n_t and note the interval is
     within-noise-driven.
-- **Usable-cases sensitivity for `m` — owner decision pending (2026-10-26).**
-  Counts are from non-candidate dev tools only. "Structural basis" counts
-  single-tool cases after filters 1–3; "all-filter basis" applies the interim
-  required-arguments heuristic too. The table is computed from the pinned
-  revision by `scripts/audit_variance_m.py`; it does **not** pick a threshold.
-  The owner picks the usable-cases rule before pre-registration.
+- **Usable-cases rule for `m` — FINAL rule, numbers pending Phase 3
+  (owner, 2026-10-26).** Counts below are from non-candidate dev tools only
+  and come from the full pinned revision, **not** from the Phase 3 dev
+  sample. "Structural basis" counts single-tool cases after filters 1–3;
+  "all-filter basis" applies the final description-aware required-arguments
+  rule too. The table is computed by `scripts/audit_variance_m.py`. **The
+  `≥10` row is the chosen rule; every other row is sensitivity only.** In
+  Phase 3, `m` is counted on the dev sample actually used (not on the full
+  dataset), and `u` is recomputed from that `m`.
 
   | Threshold: usable single-tool cases per dev tool | m (structural) | u | m (all filters) | u |
   |---:|---:|---:|---:|---:|
   | exactly 1 | 340 (excluded) | — | 340 (excluded) | — |
-  | ≥2 | 2,508 | 1.012 | 2,508 | 1.012 |
-  | ≥5 | 1,835 | 1.014 | 1,835 | 1.014 |
-  | ≥10 | 1,093 | 1.019 | 1,093 | 1.019 |
-  | ≥20 | 420 | 1.031 | 419 | 1.031 |
-  | ≥50 | 133 | 1.057 | 131 | 1.057 |
-  | ≥100 | **59 (placeholder)** | **1.090** | 51 | 1.098 |
+  | ≥2 (sensitivity only) | 2,508 | 1.012 | 2,508 | 1.012 |
+  | ≥5 (sensitivity only) | 1,835 | 1.014 | 1,835 | 1.014 |
+  | **≥10 (CHOSEN RULE; Phase-3 m recomputed)** | **1,093 (illustration)** | **1.019 (illustration)** | **1,093 (illustration)** | **1.019 (illustration)** |
+  | ≥20 (sensitivity only) | 420 | 1.031 | 420 | 1.031 |
+  | ≥50 (sensitivity only) | 133 | 1.057 | 133 | 1.057 |
+  | ≥100 (sensitivity only) | 59 | 1.090 | 58 | 1.091 |
 
   All 2,848 non-candidate dev tools have at least one usable case; **340 have
   exactly one**, cannot estimate within-tool variance, and are excluded from
-  `m`. The `m = 59`, `u = 1.090` placeholder is the **≥100 structural** row.
-  `u` falls monotonically as `m` rises: a final rule that yields `m > 59` gives
-  a smaller `u`; one that yields `m < 59` gives a larger `u` (the all-filter
-  ≥100 row is 51 / 1.098). `u` enters §7 only through
+  `m`. The `≥10` row is the **rule**; its printed `1,093` / `1.019` are the
+  full-dataset structural illustration, **not locked values**. The numbers in
+  the other rows are sensitivity only. `u` falls monotonically as `m` rises:
+  a stricter threshold yields a smaller `m` and a larger `u` (the all-filter
+  ≥100 row is 58 / 1.091). `u` enters §7 only through
   `s_pess² = (u·τ̂)² + σ²_within/n_t`. The within-tool rule
   `n_t ≥ 4σ²_within/τ̂²` is independent of `u`; the power inequality is not,
   so a larger `u` can only push the smallest passing C upward. Mapping a
@@ -543,10 +556,10 @@ touched:
    case-level bootstrap as sensitivity check, cost-ratio definition (upper
    bound of the 95% t-interval on per-tool log cost ratios ≤ 0.10), sizing
    inputs (variance components: τ̂², σ²_within, leave-one-tool-out spread
-   with the pessimistic upper-limit rule, `m` from the §7 usable-cases rule —
-   not the interim `m = 59` / `u = 1.090` placeholder — and the resulting `u`,
-   C-selection rule outcome, Δ with sign convention) and the resulting C and
-   n_t
+   with the pessimistic upper-limit rule; `m` counted from the actual Phase 3
+   dev sample as non-candidate dev tools with ≥10 usable cases; the resulting
+   `u`; C-selection rule outcome; Δ with sign convention) and the resulting
+   C and n_t
 7. Primary comparison (`haiku-agent` vs `sonnet-direct`); secondary
    (`haiku-direct`) with intervals only, no pass/fail
 8. Failure-policy table (section 4) and any pre-registered exclusions,

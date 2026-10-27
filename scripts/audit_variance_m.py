@@ -6,9 +6,11 @@ The §7 variance-components formula is fixed::
     u = sqrt((m - 1) / chi2.ppf(0.20, m - 1))
 
 where ``m`` is the number of dev tools in the leave-one-tool-out estimate.
-This script does not pick a final threshold. It reports, from non-candidate
-dev tools only, how ``m`` and ``u`` move as the minimum usable single-tool
-cases per dev tool rises. It makes no model call and runs no tool.
+The final rule (owner decision 2, 2026-10-26) is **≥10 usable cases in the
+actual Phase 3 dev sample**; this script reports how ``m`` and ``u`` move as
+the threshold rises, from non-candidate dev tools only. The printed numbers
+are full-dataset illustrations, not Phase-3 values. It makes no model call and
+runs no tool.
 
 Run::
 
@@ -27,8 +29,7 @@ from scipy.stats import chi2
 from select_candidates import FROZEN_CANDIDATES, PINNED_REVISION, analyze
 
 THRESHOLDS = (2, 5, 10, 20, 50, 100)
-PLACEHOLDER_M = 59
-EXPECTED_PLACEHOLDER_M = 59
+CHOSEN_THRESHOLD = 10
 EXPECTED_EXACTLY_ONE = 340
 EXPECTED_TOTAL_DEV_TOOLS = 2_848
 
@@ -61,7 +62,6 @@ class Sensitivity:
     filtered_exactly_one: int
     structural_total: int
     filtered_total: int
-    placeholder_u: float
 
 
 def build_sensitivity(report) -> Sensitivity:
@@ -98,7 +98,6 @@ def build_sensitivity(report) -> Sensitivity:
         filtered_exactly_one=sum(1 for c in filtered.values() if c == 1),
         structural_total=len(structural),
         filtered_total=len(filtered),
-        placeholder_u=pessimistic_u(PLACEHOLDER_M),
     )
 
 
@@ -117,14 +116,15 @@ def render_table(sensitivity: Sensitivity) -> str:
         ),
     ]
     for row in sensitivity.rows:
-        structural = (
-            f"**{row.structural_m:,} (placeholder)**"
-            if row.threshold == 100
-            else f"{row.structural_m:,}"
-        )
+        if row.threshold == CHOSEN_THRESHOLD:
+            structural = f"**{row.structural_m:,} (chosen rule; illustration)**"
+            filtered = f"**{row.filtered_m:,} (illustration)**"
+        else:
+            structural = f"{row.structural_m:,} (sensitivity only)"
+            filtered = f"{row.filtered_m:,}"
         lines.append(
             f"| ≥{row.threshold} | {structural} | {_format_u(row.structural_u)} "
-            f"| {row.filtered_m:,} | {_format_u(row.filtered_u)} |"
+            f"| {filtered} | {_format_u(row.filtered_u)} |"
         )
     lines.append("")
     lines.append(
@@ -164,12 +164,6 @@ def main() -> int:
     failures = []
     if args.revision != PINNED_REVISION:
         failures.append(f"revision {args.revision} != pinned {PINNED_REVISION}")
-    last_row = sensitivity.rows[-1]
-    if last_row.structural_m != EXPECTED_PLACEHOLDER_M:
-        failures.append(
-            f"placeholder threshold m {last_row.structural_m} "
-            f"!= {EXPECTED_PLACEHOLDER_M}"
-        )
     if sensitivity.structural_exactly_one != EXPECTED_EXACTLY_ONE:
         failures.append(
             "exactly-one dev tools "
@@ -188,7 +182,10 @@ def main() -> int:
 
     print(f"revision: {args.revision}")
     print(render_table(sensitivity))
-    print(f"placeholder u at m = {PLACEHOLDER_M}: {sensitivity.placeholder_u:.3f}")
+    print(
+        f"chosen rule: >= {CHOSEN_THRESHOLD} usable Phase-3 dev cases per "
+        "non-candidate dev tool; m and u are recomputed in Phase 3"
+    )
     print("SENSITIVITY: OK")
     return 0
 

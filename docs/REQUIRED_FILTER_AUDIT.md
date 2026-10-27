@@ -1,10 +1,10 @@
 # Required-Arguments Filter Audit — Pinned xLAM Revision
 
-**Status: evidence for owner sign-off. This report does not choose the
-final required-arguments rule.** It reproduces what the interim
-"no `default` key = required" heuristic removes and surfaces the
-description evidence needed to replace or confirm it before
-pre-registration.
+**Status: FINAL (owner decision 1, 2026-10-26).** The required-arguments
+rule is the deterministic description-aware rule implemented in
+`scripts/select_candidates.py` and reproduced here. The report keeps
+the interim "no `default` key = required" heuristic as historical
+evidence only; it is **not** the current rule.
 
 - Pinned revision: `26d14ebfe18b1f7b524bd39b404b50af5dc97866`.
 - Dataset: `Salesforce/xlam-function-calling-60k`, split `train`.
@@ -23,8 +23,8 @@ python scripts/audit_required_filter.py \
 ```
 
 The script loads the pinned revision, applies the Phase-0 structural
-filters, reproduces the interim required-arguments exclusion, and
-asserts the pinned counts below.
+filters, reproduces both the historical interim exclusion and the
+FINAL description-aware exclusion, and asserts the pinned counts below.
 
 ## Totals
 
@@ -36,7 +36,8 @@ asserts the pinned counts below.
 | Gold names absent from the row's `tools` | 0 |
 | Malformed gold arguments (non-object/string-encoded) | 0 |
 | **Malformed gold rows (final exclusion, decision 3)** | **0** |
-| **Rows removed by the interim required-arguments filter** | **1,316** |
+| **Rows removed by the interim heuristic (historical, not the rule)** | **1,316** |
+| **Rows removed by the FINAL rule (core-input only)** | **38** |
 | Missing-parameter instances | 1,432 |
 | Rows with exactly one missing-parameter instance | 1,211 |
 | Rows with more than one missing-parameter instance | 105 |
@@ -57,7 +58,7 @@ Categories are lexical and mutually exclusive, with fixed precedence: (1) filter
 | core-input | 43 | 3.0% | 38 |
 | **Total** | **1,432** | **100.0%** | **1,316** |
 
-**Description signal (overlapping with the table above).** 1,389 of 1,432 missing-parameter instances (97.0%) have a description that documents a default or optional fallback; 43 have no such language. Literal `default` keys among the missing parameters: 0 (zero by construction). These are the heuristic's contested cases: the descriptor has no `default` key, but its own text says a fallback exists.
+**Description signal (overlapping with the table above).** 1,389 of 1,432 missing-parameter instances (97.0%) have a description that documents a default or optional fallback; 43 have no such language. Literal `default` keys among the missing parameters: 0 (zero by construction). These were the interim heuristic's contested cases: the descriptor has no `default` key, but its own text says a fallback exists. The FINAL rule classifies them as optional-by-description and keeps their rows.
 
 ## Missing parameters by tool
 
@@ -206,20 +207,38 @@ These are the only missing parameters without a documented default/optional fall
 | 42 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
 | 43 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
 
-## What the audit supports (owner decision pending)
+## FINAL rule (owner decision 1, 2026-10-26)
 
-Three options, with their measured consequences on this revision:
+The required-arguments rule is **description-aware refinement**. A row is excluded only when a gold call omits a **core input**. A missing parameter is not a core input when either lexical condition holds; the filter/pagination/sort name check has precedence:
 
-| Option | Rows excluded | Eligible tools | Candidate rows removed |
+1. **filter/pagination/sort** — the parameter name matches
+
+   ```
+   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|
+   order|order_by|descending|ascending|skip|cursor|top)(?:$|_)
+   ```
+
+   with `re.IGNORECASE`; **or**
+2. **optional-by-description** — the parameter description matches
+
+   ```
+   \boptional\b|\bdefaults?\b|\bdefault\s+(?:is|to|values?)\b
+   |\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b
+   |\bnot\s+required\b|\bcan\s+be\b
+   ```
+
+   with `re.IGNORECASE`.
+
+Otherwise the parameter is **core-input** and the row is excluded. A parameter with a literal `default` key is optional before this rule runs. The implementation lives in `categorize_parameter` and `normalize_parameters` in `scripts/select_candidates.py`; this audit imports it, so the two scripts cannot drift.
+
+**Measured result under the FINAL rule:** 38 rows excluded, 43 core-input instances, **70 eligible tools**. The 63-tool, 1,316-row interim figures are historical only. Tools that lose the 100-case floor under the final rule: `integrate`.
+
+| Rule | Rows excluded | Eligible tools | Candidate rows removed |
 |---|---:|---:|---:|
-| Keep the interim heuristic | 1,316 | 63 | 0 |
-| Description-aware refinement | 38 | 70 | 0 |
-| Drop the filter | 0 | 71 | 0 |
+| **FINAL: description-aware refinement** | **38** | **70** | **0** |
+| Historical: interim no-`default` heuristic | 1,316 | 63 | 0 |
+| Historical: no filter | 0 | 71 | 0 |
 
-The description-aware refinement treats a parameter as optional when its description documents a default/optional fallback, or its name is a filter/pagination/sort parameter, even if the descriptor lacks a `default` key; only core inputs remain required. Tools that lose the 100-case floor under it: `integrate`.
+**Candidate freeze is untouched.** The final rule removes 0 candidate single-tool rows: all 12 candidate counts, the frozen order, and its sha256 are unchanged, so no candidate replacement is triggered. The 70 vs 71 difference is `integrate` falling from 101 to 95 usable cases; `integrate` is not a candidate.
 
-**Supported rule, if the owner accepts description text as the signal:** the description-aware refinement. The audit finds that 97.0% of missing-parameter instances are parameters whose own description documents a default/optional fallback, while only 43 instances (38 rows) are core inputs with no such language. This is a recommendation from the counts, **not a decision**: the owner signs the final rule before pre-registration.
-
-**If the filter is dropped**, the eligible pool returns to the structural 71 tools. The 63-tool figure is an artifact of the interim heuristic, not a property of the dataset. **No option removes a candidate single-tool row** (interim gaps: 0; description-aware gaps: 0): all 12 candidate counts, the frozen order, and its sha256 are unchanged, so no candidate replacement is triggered.
-
-The public card describes a `required` boolean; the pinned revision has zero `required` keys in its 362,482 parameter descriptors. That card-vs-data discrepancy remains open and must be recorded in pre-registration whichever rule is chosen.
+The public card describes a `required` boolean; the pinned revision has zero `required` keys in its 362,482 parameter descriptors. That card-vs-data discrepancy remains open and must be recorded in pre-registration.

@@ -70,7 +70,8 @@ def test_build_sensitivity_excludes_candidates_and_counts_thresholds() -> None:
 
     table = render_table(sensitivity)
     assert "—" in table
-    assert "(placeholder)" in table
+    assert "(chosen rule; illustration)" in table
+    assert "(sensitivity only)" in table
 
 
 def test_build_sensitivity_handles_empty_tool_pools() -> None:

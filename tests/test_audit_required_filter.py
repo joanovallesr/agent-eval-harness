@@ -1,8 +1,8 @@
-"""Tests for the interim required-arguments audit tooling.
+"""Tests for the required-arguments audit and final filter rule.
 
 These use tiny in-memory rows; they never touch the xLAM dataset, an API, or a
 candidate tool. The seams under test are the public helpers in
-``scripts/audit_required_filter.py``.
+``scripts/audit_required_filter.py`` and ``scripts/select_candidates.py``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from audit_required_filter import (
     render_markdown,
     sample_indices,
 )
-from select_candidates import analyze
+from select_candidates import analyze, normalize_parameters
 
 
 def param(description: str) -> dict:
@@ -118,7 +118,6 @@ def test_analysis_reproduces_structure_and_categories() -> None:
     assert report.interim_filtered_single_tool_counts.get("sort_numbers", 0) == 0
     assert report.refined_filtered_single_tool_counts["sort_numbers"] == 1
 
-
 def test_analysis_counts_other_arguments_and_empty_calls() -> None:
     rows = [
         row(
@@ -160,7 +159,7 @@ def test_distinct_missing_parameters_are_counted_per_row() -> None:
     assert report.rows_by_instance_count[2] == 1
 
 
-def test_optional_description_without_literal_default_is_interim_only() -> None:
+def test_optional_description_without_literal_default_is_kept_by_final_rule() -> None:
     rows = [
         # Description says default, descriptor has no `default` key.
         row(
@@ -187,10 +186,13 @@ def test_optional_description_without_literal_default_is_interim_only() -> None:
 
     report = analyze_required_filter(rows)
 
+    # The interim evidence counts the omission; the FINAL rule keeps the row.
     assert report.excluded_rows == 1
+    assert report.refined_excluded_rows == 0
     assert report.category_instances[CATEGORY_OPTIONAL] == 1
     assert report.optional_language_instances == 1
     assert report.literal_default_instances == 0
+    assert report.refined_filtered_single_tool_counts["stat"] == 1
 
 
 def test_audit_and_phase0_verifier_agree_on_shared_rows() -> None:
@@ -236,12 +238,90 @@ def test_audit_and_phase0_verifier_agree_on_shared_rows() -> None:
     assert audit.malformed_argument_rows == phase0.malformed_argument_rows
     assert audit.malformed_gold_rows == phase0.malformed_gold_rows
     assert audit.unknown_name_rows == phase0.unknown_name_rows
-    assert audit.excluded_rows == phase0.required_argument_rows
+    assert audit.excluded_rows == 2  # interim basis, evidence only
+    assert audit.refined_excluded_rows == phase0.required_argument_rows
     assert audit.single_tool_counts == phase0.single_tool_counts
     assert (
-        audit.interim_filtered_single_tool_counts
+        audit.refined_filtered_single_tool_counts
         == phase0.required_filtered_single_tool_counts
     )
+
+
+def test_final_rule_is_shared_by_audit_and_phase0_verifier() -> None:
+    """The two scripts must agree on core-input exclusion and the usable pool."""
+    rows = [
+        # Filter/sort name: final rule keeps the row.
+        row(
+            [tool("sort_numbers", {"descending": param("Sort direction.")})],
+            [{"name": "sort_numbers", "arguments": {}}],
+        ),
+        # Optional-by-description: final rule keeps the row.
+        row(
+            [tool("stat", {"alpha": param("Defaults to 0.05.")})],
+            [{"name": "stat", "arguments": {}}],
+        ),
+        # Core input: final rule excludes the row.
+        row(
+            [tool("differentiate", {"function": param("The function.")})],
+            [{"name": "differentiate", "arguments": {}}],
+        ),
+        # A row omitting both a core input and an optional parameter is
+        # excluded once, not twice.
+        row(
+            [
+                tool(
+                    "mixed",
+                    {
+                        "function": param("The function."),
+                        "alpha": param("Defaults to 0.05."),
+                    },
+                )
+            ],
+            [{"name": "mixed", "arguments": {}}],
+        ),
+        # A complete call is never excluded.
+        row(
+            [tool("add", {"a": param("First addend.")})],
+            [{"name": "add", "arguments": {"a": 1}}],
+        ),
+    ]
+
+    audit = analyze_required_filter(rows)
+    phase0 = analyze(rows)
+
+    assert audit.refined_excluded_rows == 2
+    assert phase0.required_argument_rows == 2
+    assert audit.refined_excluded_rows == phase0.required_argument_rows
+    assert (
+        audit.refined_filtered_single_tool_counts
+        == phase0.required_filtered_single_tool_counts
+    )
+    assert phase0.required_filtered_single_tool_counts["sort_numbers"] == 1
+    assert phase0.required_filtered_single_tool_counts["stat"] == 1
+    assert phase0.required_filtered_single_tool_counts["add"] == 1
+    assert phase0.required_filtered_single_tool_counts.get("differentiate", 0) == 0
+    assert phase0.required_filtered_single_tool_counts.get("mixed", 0) == 0
+
+
+def test_normalize_parameters_splits_no_default_from_core_required() -> None:
+    spec = normalize_parameters(
+        tool(
+            "mixed",
+            {
+                "function": param("The function."),
+                "alpha": param("Defaults to 0.05."),
+                "limit": param("How many rows."),
+                "fixed": {
+                    "type": "integer",
+                    "description": "A fixed value.",
+                    "default": 1,
+                },
+            },
+        )
+    )
+
+    assert spec.no_default == frozenset({"function", "alpha", "limit"})
+    assert spec.required == frozenset({"function"})
 
 
 def test_sample_is_reproducible_and_seeded() -> None:

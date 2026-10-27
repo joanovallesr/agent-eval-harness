@@ -43,7 +43,7 @@ agent-eval-harness/
 ├── tests/            # pytest: scorer pair tests + harness smoke tests
 ├── scripts/
 │   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
-│   ├── audit_required_filter.py  # interim required-args filter audit
+│   ├── audit_required_filter.py  # final required-args rule audit
 │   └── audit_variance_m.py   # §7 m/u usable-cases sensitivity
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/

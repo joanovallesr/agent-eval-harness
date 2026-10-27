@@ -17,9 +17,9 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
       12 candidate held-out tools — seed 42, sha256-hashed, committed in
       `docs/CANDIDATES.md`.
 - [x] Compute post-filter single-tool counts per tool and the 71-tool
-      structural eligible pool (before the interim required-arguments
-      heuristic) — filters depend only on dataset structure, so this needs
-      no tag. Verify the 12 candidates against the 100-case floor.
+      structural eligible pool before the required-arguments rule — filters
+      depend only on dataset structure, so this needs no tag. Verify the 12
+      candidates against the 100-case floor.
 - [x] Run the leak check and distractor-exposure count across the candidates
       (dataset structure only); document the 12-candidate replacement rule.
 - [x] Commit the reproducible verifier `scripts/select_candidates.py`; the

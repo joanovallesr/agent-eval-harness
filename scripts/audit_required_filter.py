@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Audit the interim required-arguments filter on the pinned xLAM revision.
+"""Audit the FINAL description-aware required-arguments rule on the pinned xLAM revision.
 
-The Phase-0 verifier treats a parameter without a literal ``default`` key as
-required. The pinned revision has **zero** ``required`` keys, while the public
-dataset card describes a required flag. This script measures what that
-assumption removes and exposes the evidence needed for the owner's final rule.
+The Phase-0 verifier used to treat a parameter without a literal ``default``
+key as required. The pinned revision has **zero** ``required`` keys, while the
+public dataset card describes a required flag. This script measures what that
+interim assumption removes and reproduces the FINAL deterministic rule chosen
+by the owner: only a missing core input excludes a row.
 
 It is offline: it reads the pinned dataset only. It makes no model call, runs
 no candidate tool, and writes no raw query, gold answer, or full tool schema.
@@ -23,20 +24,35 @@ from __future__ import annotations
 import argparse
 import json
 import random
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from select_candidates import (
+    CATEGORY_CORE,
+    CATEGORY_FILTER,
+    CATEGORY_OPTIONAL,
+    CATEGORY_ORDER,
     FROZEN_CANDIDATES,
     MIN_SINGLE_TOOL_CASES,
+    OPTIONAL_LANGUAGE,
     PINNED_REVISION,
+    categorize_parameter,
     normalize_parameters,
 )
 
 SAMPLE_SIZE = 50
 SAMPLE_SEED = 42
+
+# Re-exported for the audit tests; the canonical definitions and the final
+# rule live in select_candidates.py.
+__all__ = [
+    "CATEGORY_CORE",
+    "CATEGORY_FILTER",
+    "CATEGORY_OPTIONAL",
+    "CATEGORY_ORDER",
+    "categorize_parameter",
+]
 
 EXPECTED_EXCLUDED_ROWS = 1_316
 EXPECTED_MISSING_INSTANCES = 1_432
@@ -45,42 +61,6 @@ EXPECTED_CORE_INSTANCES = 43
 EXPECTED_STRUCTURAL_POOL = 71
 EXPECTED_INTERIM_POOL = 63
 EXPECTED_REFINED_POOL = 70
-
-CATEGORY_OPTIONAL = "optional-by-description"
-CATEGORY_FILTER = "filter/pagination/sort"
-CATEGORY_CORE = "core-input"
-CATEGORY_ORDER = (CATEGORY_OPTIONAL, CATEGORY_FILTER, CATEGORY_CORE)
-
-# Lexical signals only. They organise the evidence; they are not a verdict.
-OPTIONAL_LANGUAGE = re.compile(
-    r"\boptional\b"
-    r"|\bdefaults?\b"
-    r"|\bdefault\s+(?:is|to|values?)\b"
-    r"|\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b"
-    r"|\bnot\s+required\b"
-    r"|\bcan\s+be\b",
-    re.IGNORECASE,
-)
-FILTER_OR_SORT_NAME = re.compile(
-    r"(?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|"
-    r"order|order_by|descending|ascending|skip|cursor|top)(?:$|_)",
-    re.IGNORECASE,
-)
-
-
-def categorize_parameter(name: str, description: str) -> str:
-    """Return a lexical category for a missing parameter.
-
-    Precedence: a filter/pagination/sort name first, then description text
-    that documents a default or optional behavior, then everything else. The
-    category is a reproducible reading of names and descriptions, not the
-    final required-arguments rule.
-    """
-    if FILTER_OR_SORT_NAME.search(name):
-        return CATEGORY_FILTER
-    if OPTIONAL_LANGUAGE.search(description):
-        return CATEGORY_OPTIONAL
-    return CATEGORY_CORE
 
 
 def sample_indices(
@@ -179,7 +159,12 @@ def _has_literal_default(tool: dict, parameter: str) -> bool:
 
 
 def analyze_required_filter(dataset) -> AuditReport:
-    """Apply the Phase-0 structural filters and the interim required filter."""
+    """Apply the structural filters and measure both required-argument rules.
+
+    ``no_default`` is the evidence basis: every omitted parameter without a
+    literal ``default`` key. The final rule then excludes only rows where at
+    least one such omission is a core input.
+    """
     report = AuditReport()
     candidates = set(FROZEN_CANDIDATES)
 
@@ -232,7 +217,7 @@ def analyze_required_filter(dataset) -> AuditReport:
             tool = tools[answer["name"]]
             spec = normalize_parameters(tool)
             arguments = answer["arguments"]
-            missing_names = spec.required - set(arguments)
+            missing_names = spec.no_default - set(arguments)
             if missing_names:
                 any_missing = True
                 if arguments:
@@ -325,11 +310,11 @@ def render_markdown(
 
     add("# Required-Arguments Filter Audit — Pinned xLAM Revision")
     add("")
-    add("**Status: evidence for owner sign-off. This report does not choose the")
-    add("final required-arguments rule.** It reproduces what the interim")
-    add('"no `default` key = required" heuristic removes and surfaces the')
-    add("description evidence needed to replace or confirm it before")
-    add("pre-registration.")
+    add("**Status: FINAL (owner decision 1, 2026-10-26).** The required-arguments")
+    add("rule is the deterministic description-aware rule implemented in")
+    add("`scripts/select_candidates.py` and reproduced here. The report keeps")
+    add('the interim "no `default` key = required" heuristic as historical')
+    add("evidence only; it is **not** the current rule.")
     add("")
     add(f"- Pinned revision: `{PINNED_REVISION}`.")
     add("- Dataset: `Salesforce/xlam-function-calling-60k`, split `train`.")
@@ -349,8 +334,8 @@ def render_markdown(
     add("```")
     add("")
     add("The script loads the pinned revision, applies the Phase-0 structural")
-    add("filters, reproduces the interim required-arguments exclusion, and")
-    add("asserts the pinned counts below.")
+    add("filters, reproduces both the historical interim exclusion and the")
+    add("FINAL description-aware exclusion, and asserts the pinned counts below.")
     add("")
 
     add("## Totals")
@@ -373,8 +358,12 @@ def render_markdown(
         f"| **{_fmt(report.malformed_gold_rows)}** |"
     )
     add(
-        "| **Rows removed by the interim required-arguments filter** "
+        "| **Rows removed by the interim heuristic (historical, not the rule)** "
         f"| **{_fmt(report.excluded_rows)}** |"
+    )
+    add(
+        "| **Rows removed by the FINAL rule (core-input only)** "
+        f"| **{_fmt(report.refined_excluded_rows)}** |"
     )
     add(f"| Missing-parameter instances | {_fmt(report.missing_instances)} |")
     add(
@@ -447,9 +436,10 @@ def render_markdown(
         f"{_fmt(report.missing_instances - report.optional_language_instances)} "
         "have no such language. Literal `default` keys among the missing "
         f"parameters: {_fmt(report.literal_default_instances)} (zero by "
-        "construction). These are the heuristic's contested cases: the "
-        "descriptor has no `default` key, but its own text says a fallback "
-        "exists."
+        "construction). These were the interim heuristic's contested cases: "
+        "the descriptor has no `default` key, but its own text says a fallback "
+        "exists. The FINAL rule classifies them as optional-by-description and "
+        "keeps their rows."
     )
     add("")
 
@@ -533,58 +523,83 @@ def render_markdown(
     )
     dropped_text = ", ".join(f"`{tool}`" for tool in dropped) or "none"
 
-    add("## What the audit supports (owner decision pending)")
+    add("## FINAL rule (owner decision 1, 2026-10-26)")
     add("")
-    add("Three options, with their measured consequences on this revision:")
+    add(
+        "The required-arguments rule is **description-aware refinement**. "
+        "A row is excluded only when a gold call omits a **core input**. A "
+        "missing parameter is not a core input when either lexical condition "
+        "holds; the filter/pagination/sort name check has precedence:"
+    )
     add("")
-    add("| Option | Rows excluded | Eligible tools | Candidate rows removed |")
+    add("1. **filter/pagination/sort** — the parameter name matches")
+    add("")
+    add("   ```")
+    add(
+        "   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|"
+    )
+    add("   order|order_by|descending|ascending|skip|cursor|top)(?:$|_)")
+    add("   ```")
+    add("")
+    add("   with `re.IGNORECASE`; **or**")
+    add("2. **optional-by-description** — the parameter description matches")
+    add("")
+    add("   ```")
+    add("   \\boptional\\b|\\bdefaults?\\b|\\bdefault\\s+(?:is|to|values?)\\b")
+    add(
+        "   |\\bif\\s+(?:provided|specified|given|omitted|not\\s+provided|none)\\b"
+    )
+    add("   |\\bnot\\s+required\\b|\\bcan\\s+be\\b")
+    add("   ```")
+    add("")
+    add("   with `re.IGNORECASE`.")
+    add("")
+    add(
+        "Otherwise the parameter is **core-input** and the row is excluded. "
+        "A parameter with a literal `default` key is optional before this "
+        "rule runs. The implementation lives in `categorize_parameter` and "
+        "`normalize_parameters` in `scripts/select_candidates.py`; this audit "
+        "imports it, so the two scripts cannot drift."
+    )
+    add("")
+    add(
+        f"**Measured result under the FINAL rule:** "
+        f"{_fmt(report.refined_excluded_rows)} rows excluded, "
+        f"{_fmt(report.category_instances[CATEGORY_CORE])} core-input "
+        f"instances, **{refined_pool} eligible tools**. The "
+        f"{interim_pool}-tool, {_fmt(report.excluded_rows)}-row interim "
+        "figures are historical only. Tools that lose the 100-case floor "
+        f"under the final rule: {dropped_text}."
+    )
+    add("")
+    add("| Rule | Rows excluded | Eligible tools | Candidate rows removed |")
     add("|---|---:|---:|---:|")
     add(
-        f"| Keep the interim heuristic | {_fmt(report.excluded_rows)} "
-        f"| {interim_pool} | {_fmt(interim_gaps)} |"
+        f"| **FINAL: description-aware refinement** "
+        f"| **{_fmt(report.refined_excluded_rows)}** | **{refined_pool}** "
+        f"| **{_fmt(refined_gaps)}** |"
     )
     add(
-        f"| Description-aware refinement | {_fmt(report.refined_excluded_rows)} "
-        f"| {refined_pool} | {_fmt(refined_gaps)} |"
+        f"| Historical: interim no-`default` heuristic "
+        f"| {_fmt(report.excluded_rows)} | {interim_pool} | "
+        f"{_fmt(interim_gaps)} |"
     )
-    add(f"| Drop the filter | 0 | {structural_pool} | 0 |")
+    add(f"| Historical: no filter | 0 | {structural_pool} | 0 |")
     add("")
     add(
-        "The description-aware refinement treats a parameter as optional when "
-        "its description documents a default/optional fallback, or its name "
-        "is a filter/pagination/sort parameter, even if the descriptor lacks "
-        f"a `default` key; only core inputs remain required. Tools that lose "
-        f"the 100-case floor under it: {dropped_text}."
-    )
-    add("")
-    add(
-        f"**Supported rule, if the owner accepts description text as the "
-        f"signal:** the description-aware refinement. The audit finds that "
-        f"{_share(report.optional_language_instances, report.missing_instances)} "
-        "of missing-parameter instances are parameters whose own description "
-        "documents a default/optional fallback, while only "
-        f"{_fmt(report.category_instances[CATEGORY_CORE])} instances "
-        f"({_fmt(report.refined_excluded_rows)} rows) are core inputs with no "
-        "such language. This is a recommendation from the counts, **not a "
-        "decision**: the owner signs the final rule before pre-registration."
-    )
-    add("")
-    add(
-        "**If the filter is dropped**, the eligible pool returns to the "
-        f"structural {structural_pool} tools. The {interim_pool}-tool figure "
-        "is an artifact of the interim heuristic, not a property of the "
-        "dataset. **No option removes a candidate single-tool row** "
-        f"(interim gaps: {_fmt(interim_gaps)}; description-aware gaps: "
-        f"{_fmt(refined_gaps)}): all {len(FROZEN_CANDIDATES)} candidate "
-        "counts, the frozen order, and its sha256 are unchanged, so no "
-        "candidate replacement is triggered."
+        f"**Candidate freeze is untouched.** The final rule removes "
+        f"{_fmt(refined_gaps)} candidate single-tool rows: all "
+        f"{len(FROZEN_CANDIDATES)} candidate counts, the frozen order, and its "
+        "sha256 are unchanged, so no candidate replacement is triggered. The "
+        "70 vs 71 difference is `integrate` falling from 101 to 95 usable "
+        "cases; `integrate` is not a candidate."
     )
     add("")
     add(
         "The public card describes a `required` boolean; the pinned revision "
         "has zero `required` keys in its 362,482 parameter descriptors. That "
         "card-vs-data discrepancy remains open and must be recorded in "
-        "pre-registration whichever rule is chosen."
+        "pre-registration."
     )
     add("")
 
