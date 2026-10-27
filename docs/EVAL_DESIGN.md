@@ -369,7 +369,9 @@ renaming it.)
   names one §7 fallback (wider margin / lower power / drop binary framing),
   chosen on dev evidence. Worked check: at C = 6 the t-quantiles sum to
   2.571 + 0.920 = 3.491, so 80% power at Δ = 0 needs s_pess < 3.5 points; at
-  C = 8 the bar is s_pess < 4.3 points.
+  C = 8 the bar is s_pess < 4.3 points. The numeric C and `n_t` are **not
+  fixed here**: they are selected in pre-registration after the owner picks
+  the usable-cases threshold above.
 - **One `n_t` for every held-out tool** — the max of the per-tool
   requirements, floor 100 usable cases — so the pooled per-case mean
   coincides with §1's equal-weighted estimand. Per-tool requirement:
