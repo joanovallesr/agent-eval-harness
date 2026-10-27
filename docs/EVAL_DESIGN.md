@@ -357,8 +357,10 @@ renaming it.)
   ≥100 row is 51 / 1.098). `u` enters §7 only through
   `s_pess² = (u·τ̂)² + σ²_within/n_t`. The within-tool rule
   `n_t ≥ 4σ²_within/τ̂²` is independent of `u`; the power inequality is not,
-  so a larger `u` can only push the smallest passing C upward. C selection
-  stays with the pre-registered rule below; this table does not choose C.
+  so a larger `u` can only push the smallest passing C upward. Mapping a
+  specific `u` to a concrete C or `n_t` needs the Phase-3 `τ̂` and
+  `σ²_within`, which do not exist yet, so C and `n_t` stay for
+  pre-registration; this table does not choose them.
 - **C-selection rule (pre-registered, no discretion):** the smallest C in
   {6, 7, 8} that (a) passes the power inequality at the pessimistic s_pess
   and (b) fits the budget ledger. C is a number of **held-out tools** drawn
