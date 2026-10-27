@@ -42,12 +42,15 @@ agent-eval-harness/
 │   └── calibration.py# judge calibration vs human labels (Cohen's kappa)
 ├── tests/            # pytest: scorer pair tests + harness smoke tests
 ├── scripts/
-│   └── select_candidates.py # reproducible Phase-0 candidate verifier
+│   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
+│   ├── audit_required_filter.py  # interim required-args filter audit
+│   └── audit_variance_m.py   # §7 m/u usable-cases sensitivity
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
+│   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit for owner sign-off
 │   ├── BUDGET.md           # $20 ledger and ceilings
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 ├── data/             # benchmark subsets live here (gitignored, see data/README.md)

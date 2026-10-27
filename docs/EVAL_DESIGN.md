@@ -175,21 +175,35 @@ it.
   it:** answer-tools only (eligibility is defined by gold `answers`, never by
   distractor `tools`); a gold function name not present in the row's `tools`
   is excluded; an empty `answers` where a call is expected is excluded; a
-  gold call that omits a required parameter is excluded. Required parameters
-  are normalized with the pinned parameter-format normalizer: xLAM's flat map
+  malformed gold call is excluded and counted (below); a gold call that omits
+  a required parameter is excluded under the **interim** required-arguments
+  heuristic (below).
+- **Malformed-gold exclusion — FINAL (owner, 2026-10-26).** A row is excluded
+  when a gold call has a missing or non-string tool name, non-object
+  arguments, or string-encoded arguments. The row is excluded **before** the
+  split, its count is reported, and it is a pre-registered exclusion — **not**
+  a score of 0. The pinned revision has **zero** such rows (defensive only):
+  all 100,011 gold calls carry a string name and a JSON object in
+  `arguments`.
+- **Required-arguments filter — INTERIM heuristic, not a dataset rule
+  (owner, 2026-10-26).** A gold call that omits a parameter with no `default`
+  key is excluded under the current heuristic. Parameters are normalized with
+  the pinned normalizer: xLAM's flat map
   `param -> {type, description, default?}` treats a parameter without a
   `default` as required, and a nested JSON-Schema `properties`/`required`
   form is also handled defensively. The pinned revision has 168,870 flat tool
   declarations and zero nested declarations. The public card describes a
   `required` boolean, but the pinned revision has zero `required` keys in its
-  362,482 parameter descriptors; absence of `default` is the operative
-  required signal. That discrepancy is flagged for owner sign-off in
-  `data/README.md`. The required-argument filter removes 1,316 rows (11 of
-  them with entirely empty arguments where required parameters exist); none
-  of those rows are single-tool candidate cases. The candidate counts
-  therefore survive every filter unchanged. Applying the required-argument
-  filter before tool eligibility yields 63 eligible tools; the frozen order
-  is generated from the 71-tool structural pool and is not re-rolled.
+  362,482 parameter descriptors. That card-vs-data discrepancy is preserved
+  in `docs/REQUIRED_FILTER_AUDIT.md`; "no default = required" is a documented
+  assumption, **not** the dataset's rule. Under this interim heuristic the
+  filter removes 1,316 rows (11 of them with entirely empty arguments where
+  required parameters exist); none of those rows are single-tool candidate
+  cases. The candidate counts therefore survive every filter unchanged.
+  Applying the interim filter before tool eligibility yields 63 eligible
+  tools; the frozen order is generated from the 71-tool structural pool and
+  is not re-rolled. The **final** rule is pending owner sign-off after
+  `docs/REQUIRED_FILTER_AUDIT.md`, before pre-registration.
 - **Mixed cases are excluded and counted.** A case whose gold calls include
   both a candidate held-out tool and a non-candidate tool is excluded from
   the candidate counts; on the pinned revision that is 1,270 cases. A case
@@ -306,17 +320,45 @@ renaming it.)
     `u = √((m−1)/χ²_{0.20, m−1})`, **m = number of dev tools in the LOTO
     estimate**. χ²_{0.20, m−1} denotes the lower-20% quantile
     (P(X ≤ x) = 0.20), so this is an 80% upper confidence limit.
-    **m is no longer 13.** The planning baseline uses the 59 eligible dev
-    tools (71 eligible tools minus the 12 held-out candidates), which gives
-    **u ≈ 1.090**; the old u ≈ 1.240 at m = 13 must not be carried over. If
-    Phase 3's dev sample includes dev tools below the 100-case eligibility
-    floor, recompute m and u from the actual dev-tool set before
-    pre-registration. u is never inherited from a different m.
+    **m is no longer 13.** **Interim placeholder (decision 2, owner
+    2026-10-26):** the planning baseline keeps **m = 59** (71 eligible tools
+    minus the 12 candidates) and **u = 1.090**. This is a conservative
+    placeholder, **not** a value derived from a final usable-cases rule. The
+    final `m` must come from the usable-cases sensitivity table below and be
+    frozen in pre-registration; `u` is never inherited from a different `m`.
+    The old `u ≈ 1.240` at `m = 13` must not be carried over.
   - The power inequality uses s_pess. (Plugging the mixed LOTO SD straight
     in inflates s under the n_t rule below — small, but the components
     version is the right derivation.)
   - If τ̂² ≈ 0, use the 100-case floor for n_t and note the interval is
     within-noise-driven.
+- **Usable-cases sensitivity for `m` — owner decision pending (2026-10-26).**
+  Counts are from non-candidate dev tools only. "Structural basis" counts
+  single-tool cases after filters 1–3; "all-filter basis" applies the interim
+  required-arguments heuristic too. The table is computed from the pinned
+  revision by `scripts/audit_variance_m.py`; it does **not** pick a threshold.
+  The owner picks the usable-cases rule before pre-registration.
+
+  | Threshold: usable single-tool cases per dev tool | m (structural) | u | m (all filters) | u |
+  |---:|---:|---:|---:|---:|
+  | exactly 1 | 340 (excluded) | — | 340 (excluded) | — |
+  | ≥2 | 2,508 | 1.012 | 2,508 | 1.012 |
+  | ≥5 | 1,835 | 1.014 | 1,835 | 1.014 |
+  | ≥10 | 1,093 | 1.019 | 1,093 | 1.019 |
+  | ≥20 | 420 | 1.031 | 419 | 1.031 |
+  | ≥50 | 133 | 1.057 | 131 | 1.057 |
+  | ≥100 | **59 (placeholder)** | **1.090** | 51 | 1.098 |
+
+  All 2,848 non-candidate dev tools have at least one usable case; **340 have
+  exactly one**, cannot estimate within-tool variance, and are excluded from
+  `m`. The `m = 59`, `u = 1.090` placeholder is the **≥100 structural** row.
+  `u` falls monotonically as `m` rises: a final rule that yields `m > 59` gives
+  a smaller `u`; one that yields `m < 59` gives a larger `u` (the all-filter
+  ≥100 row is 51 / 1.098). `u` enters §7 only through
+  `s_pess² = (u·τ̂)² + σ²_within/n_t`. The within-tool rule
+  `n_t ≥ 4σ²_within/τ̂²` is independent of `u`; the power inequality is not,
+  so a larger `u` can only push the smallest passing C upward. C selection
+  stays with the pre-registered rule below; this table does not choose C.
 - **C-selection rule (pre-registered, no discretion):** the smallest C in
   {6, 7, 8} that (a) passes the power inequality at the pessimistic s_pess
   and (b) fits the budget ledger. C is a number of **held-out tools** drawn
@@ -497,16 +539,19 @@ touched:
    case-level bootstrap as sensitivity check, cost-ratio definition (upper
    bound of the 95% t-interval on per-tool log cost ratios ≤ 0.10), sizing
    inputs (variance components: τ̂², σ²_within, leave-one-tool-out spread
-   with the pessimistic upper-limit rule, m = dev tools and the resulting u,
+   with the pessimistic upper-limit rule, `m` from the §7 usable-cases rule —
+   not the interim `m = 59` / `u = 1.090` placeholder — and the resulting `u`,
    C-selection rule outcome, Δ with sign convention) and the resulting C and
    n_t
 7. Primary comparison (`haiku-agent` vs `sonnet-direct`); secondary
    (`haiku-direct`) with intervals only, no pass/fail
-8. Failure-policy table (section 4) and any pre-registered exclusions
+8. Failure-policy table (section 4) and any pre-registered exclusions,
+   including the final required-arguments rule and the malformed-gold
+   exclusion with its counted row total
 9. Sampling: the 12 ordered candidate held-out tools (from Phase 0 in
    `docs/CANDIDATES.md`), usable-row counts per candidate, distractor
    exposure per candidate, the leak-check result, the selected C with
-   reason, within-tool seeds, and the filter definitions
+   reason, within-tool seeds, and the final filter definitions
 
 ## 14. What "done" looks like
 

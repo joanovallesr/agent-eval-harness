@@ -33,6 +33,12 @@ PINNED_REVISION=26d14ebfe18b1f7b524bd39b404b50af5dc97866
 
 ## License / republication verdict (drafted 2026-10-26; pending owner sign-off)
 
+**Status: DRAFT — not a verdict.** Owner decision (2026-10-26): the
+**publication rule is approved; the license verdict is not**. Until the owner
+confirms the verdict, do **not** publish raw dataset rows, queries, gold
+answers, full tool schemas, or traces that reproduce them. The draft below
+stays a draft.
+
 **Public card facts.** The Hub license tag reads **`cc-by-4.0`**. Access is
 gated: the card says "Acknowledge to follow corresponding license and cite
 APIGen to access the repository", and files require accepting conditions while
@@ -71,12 +77,15 @@ publish links and aggregates only.
 - [ ] Whether model traces count as derivatives or redistribution.
 - [ ] Whether the APIGen citation belongs in the README, this file, or both.
 
-**Card/data discrepancy (verified against the pinned revision).** The public
-card describes a `required` boolean on each parameter, but the pinned
-revision's 362,482 parameter descriptors contain only `type`, `description`,
-and (optionally) `default`: **zero** have a `required` key. The Phase-0
-required-argument filter therefore treats a parameter without a `default` as
-required. This is a decision needing owner sign-off before pre-registration.
+**Card/data discrepancy and interim filter (owner decision, 2026-10-26).**
+The public card describes a `required` boolean on each parameter, but the
+pinned revision's 362,482 parameter descriptors contain only `type`,
+`description`, and (optionally) `default`: **zero** have a `required` key. The
+Phase-0 required-argument filter therefore treats a parameter without a
+`default` as required — but that is an **interim assumption/heuristic, not the
+dataset's rule**. The final rule is pending the audit in
+`docs/REQUIRED_FILTER_AUDIT.md` and owner sign-off before pre-registration.
+The discrepancy stays in the record either way.
 
 ## Splits
 
@@ -88,11 +97,15 @@ sha256, eligibility filters, and per-candidate counts are in
 `docs/CANDIDATES.md`; rerun `scripts/select_candidates.py` to reproduce them.
 
 Invalid-row filters (EVAL_DESIGN §5) are applied **before** the split
-freezes: answer-tools only, bad/missing answer names, empty answers, missing
-required arguments, and mixed candidate+non-candidate cases (excluded and
-counted). Phase 0 on the pinned revision found 71 eligible tools with at
-least 100 single-tool cases; all 12 frozen candidates clear the floor after
-every filter.
+freezes: answer-tools only, bad/missing answer names, empty answers, malformed
+gold calls (missing/non-string name, non-object/string-encoded arguments;
+excluded and counted, zero on the pinned revision), missing required arguments
+under the **interim** heuristic (final rule pending
+`docs/REQUIRED_FILTER_AUDIT.md`), and mixed candidate+non-candidate cases
+(excluded and counted). Phase 0 on the pinned revision found 71 eligible tools
+with at least 100 single-tool cases under the structural filters; the interim
+required-arguments heuristic gives a diagnostic 63-tool all-filter pool. All
+12 frozen candidates clear the floor after every filter.
 
 | File | Content |
 |---|---|
