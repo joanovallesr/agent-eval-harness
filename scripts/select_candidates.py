@@ -34,6 +34,11 @@ PINNED_REVISION = "26d14ebfe18b1f7b524bd39b404b50af5dc97866"
 SEED = 42
 MIN_SINGLE_TOOL_CASES = 100
 
+# Pinned invariants shared with the audit, so both scripts use one source.
+EXPECTED_STRUCTURAL_POOL = 71
+EXPECTED_USABLE_POOL = 70
+EXPECTED_FINAL_REQUIRED_EXCLUDED_ROWS = 38
+
 FROZEN_CANDIDATES = [
     "calculate_standard_deviation",
     "average",
@@ -456,19 +461,24 @@ def main() -> int:
         failures.append(
             f"revision {args.revision} != pinned {PINNED_REVISION}"
         )
-    if len(eligible_structural) != 71:
+    if len(eligible_structural) != EXPECTED_STRUCTURAL_POOL:
         failures.append(
-            f"structural eligible pool {len(eligible_structural)} != 71"
+            f"structural eligible pool {len(eligible_structural)} "
+            f"!= {EXPECTED_STRUCTURAL_POOL}"
         )
-    if len(eligible_after_all) != 70:
+    if len(eligible_after_all) != EXPECTED_USABLE_POOL:
         failures.append(
-            f"all-filter eligible pool {len(eligible_after_all)} != 70"
+            f"all-filter eligible pool {len(eligible_after_all)} "
+            f"!= {EXPECTED_USABLE_POOL}"
         )
-    if report.required_argument_rows != 38:
+    if report.required_argument_rows != EXPECTED_FINAL_REQUIRED_EXCLUDED_ROWS:
         failures.append(
             "final required-argument filter rows "
-            f"{report.required_argument_rows} != 38"
+            f"{report.required_argument_rows} "
+            f"!= {EXPECTED_FINAL_REQUIRED_EXCLUDED_ROWS}"
         )
+    if SEED != 42:
+        failures.append(f"seed {SEED} != 42")
     if report.parameter_forms.get("flat") != 168_870:
         failures.append(
             "flat tool declarations "

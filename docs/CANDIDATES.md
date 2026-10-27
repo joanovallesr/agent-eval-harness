@@ -74,16 +74,21 @@ Applied in this order, before the split is materialized:
    not used in the v1 per-tool analysis.
 4. **Required-arguments filter — FINAL (description-aware).** A gold call
    that omits a parameter is excluded only when that parameter is a
-   **core input**. A missing parameter is not core when its name matches the
-   filter/pagination/sort pattern (`filter`, `filters`, `limit`, `offset`,
-   `page`, `per_page`, `sort`, `sort_by`, `order`, `order_by`, `descending`,
-   `ascending`, `skip`, `cursor`, `top`, as a whole name segment,
-   case-insensitive) or its description matches the optional/default-language
-   regex (`\boptional\b`, `\bdefaults?\b`,
-   `\bdefault\s+(?:is|to|values?)\b`,
-   `\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b`,
-   `\bnot\s+required\b`, `\bcan\s+be\b`, case-insensitive). The name check has
-   precedence. The exact rule is stated verbatim and implemented once in
+   **core input**. A missing parameter is not core when its name matches this
+   pattern:
+
+   ```
+   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|order|order_by|descending|ascending|skip|cursor|top)(?:$|_)
+   ```
+
+   or its description matches this pattern:
+
+   ```
+   \boptional\b|\bdefaults?\b|\bdefault\s+(?:is|to|values?)\b|\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b|\bnot\s+required\b|\bcan\s+be\b
+   ```
+
+   Both use `re.IGNORECASE`, and the name check has precedence. The exact
+   rule is stated verbatim and implemented once in
    `scripts/select_candidates.py`, imported by the audit. A parameter with a
    literal `default` key is optional before this rule runs. The pinned
    revision has **168,870 flat tool declarations and zero nested

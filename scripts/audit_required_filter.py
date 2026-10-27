@@ -30,9 +30,11 @@ from pathlib import Path
 
 from select_candidates import (
     CATEGORY_CORE,
-    CATEGORY_FILTER,
-    CATEGORY_OPTIONAL,
     CATEGORY_ORDER,
+    EXPECTED_FINAL_REQUIRED_EXCLUDED_ROWS,
+    EXPECTED_STRUCTURAL_POOL,
+    EXPECTED_USABLE_POOL,
+    FILTER_OR_SORT_NAME,
     FROZEN_CANDIDATES,
     MIN_SINGLE_TOOL_CASES,
     OPTIONAL_LANGUAGE,
@@ -44,23 +46,12 @@ from select_candidates import (
 SAMPLE_SIZE = 50
 SAMPLE_SEED = 42
 
-# Re-exported for the audit tests; the canonical definitions and the final
-# rule live in select_candidates.py.
-__all__ = [
-    "CATEGORY_CORE",
-    "CATEGORY_FILTER",
-    "CATEGORY_OPTIONAL",
-    "CATEGORY_ORDER",
-    "categorize_parameter",
-]
-
 EXPECTED_EXCLUDED_ROWS = 1_316
 EXPECTED_MISSING_INSTANCES = 1_432
-EXPECTED_REFINED_ROWS = 38
+EXPECTED_REFINED_ROWS = EXPECTED_FINAL_REQUIRED_EXCLUDED_ROWS
 EXPECTED_CORE_INSTANCES = 43
-EXPECTED_STRUCTURAL_POOL = 71
 EXPECTED_INTERIM_POOL = 63
-EXPECTED_REFINED_POOL = 70
+EXPECTED_REFINED_POOL = EXPECTED_USABLE_POOL
 
 
 def sample_indices(
@@ -224,11 +215,13 @@ def analyze_required_filter(dataset) -> AuditReport:
                     other_arguments = True
                 else:
                     empty_arguments = True
+            # Same shared predicate the Phase-0 verifier uses, so the 38-row
+            # exclusion and the 70-tool pool cannot drift.
+            if spec.required - set(arguments):
+                any_core = True
             for parameter in sorted(missing_names):
                 description = _tool_description(tool, parameter)
                 category = categorize_parameter(parameter, description)
-                if category == CATEGORY_CORE:
-                    any_core = True
                 missing.append(
                     MissingParameter(
                         dataset_index=index,
@@ -410,10 +403,15 @@ def render_markdown(
         "Categories are lexical and mutually exclusive, with fixed precedence: "
         "(1) filter/pagination/sort parameter name, (2) description documents "
         "a default/optional fallback, (3) core input. Rows can touch more than "
-        "one category, so the row column does not sum to the total."
+        "one category, so the row column does not sum to the total. The row "
+        "column is the **historical interim basis** (1,316 rows); the FINAL "
+        "rule excludes only the 38 core-input rows."
     )
     add("")
-    add("| Category | Missing-parameter instances | Share | Excluded rows touched |")
+    add(
+        "| Category | Missing-parameter instances | Share "
+        "| Rows touched by the historical interim rule |"
+    )
     add("|---|---:|---:|---:|")
     for category in CATEGORY_ORDER:
         instances = report.category_instances[category]
@@ -423,8 +421,16 @@ def render_markdown(
             f"| {_fmt(report.category_rows[category])} |"
         )
     add(
-        f"| **Total** | **{_fmt(report.missing_instances)}** | **100.0%** "
-        f"| **{_fmt(report.excluded_rows)}** |"
+        f"| **Interim-basis total** | **{_fmt(report.missing_instances)}** "
+        f"| **100.0%** | **{_fmt(report.excluded_rows)}** |"
+    )
+    add("")
+    add(
+        f"**FINAL exclusion:** {_fmt(report.category_instances[CATEGORY_CORE])} "
+        f"core-input instances "
+        f"({_share(report.category_instances[CATEGORY_CORE], report.missing_instances)}) "
+        f"in {_fmt(report.refined_excluded_rows)} rows. Only those rows are "
+        "excluded by the final rule."
     )
     add("")
     add(
@@ -535,21 +541,14 @@ def render_markdown(
     add("1. **filter/pagination/sort** — the parameter name matches")
     add("")
     add("   ```")
-    add(
-        "   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|"
-    )
-    add("   order|order_by|descending|ascending|skip|cursor|top)(?:$|_)")
+    add(f"   {FILTER_OR_SORT_NAME.pattern}")
     add("   ```")
     add("")
     add("   with `re.IGNORECASE`; **or**")
     add("2. **optional-by-description** — the parameter description matches")
     add("")
     add("   ```")
-    add("   \\boptional\\b|\\bdefaults?\\b|\\bdefault\\s+(?:is|to|values?)\\b")
-    add(
-        "   |\\bif\\s+(?:provided|specified|given|omitted|not\\s+provided|none)\\b"
-    )
-    add("   |\\bnot\\s+required\\b|\\bcan\\s+be\\b")
+    add(f"   {OPTIONAL_LANGUAGE.pattern}")
     add("   ```")
     add("")
     add("   with `re.IGNORECASE`.")

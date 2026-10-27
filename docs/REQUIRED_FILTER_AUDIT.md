@@ -49,14 +49,16 @@ FINAL description-aware exclusion, and asserts the pinned counts below.
 
 ## Category breakdown
 
-Categories are lexical and mutually exclusive, with fixed precedence: (1) filter/pagination/sort parameter name, (2) description documents a default/optional fallback, (3) core input. Rows can touch more than one category, so the row column does not sum to the total.
+Categories are lexical and mutually exclusive, with fixed precedence: (1) filter/pagination/sort parameter name, (2) description documents a default/optional fallback, (3) core input. Rows can touch more than one category, so the row column does not sum to the total. The row column is the **historical interim basis** (1,316 rows); the FINAL rule excludes only the 38 core-input rows.
 
-| Category | Missing-parameter instances | Share | Excluded rows touched |
+| Category | Missing-parameter instances | Share | Rows touched by the historical interim rule |
 |---|---:|---:|---:|
 | optional-by-description | 1,297 | 90.6% | 1,199 |
 | filter/pagination/sort | 92 | 6.4% | 92 |
 | core-input | 43 | 3.0% | 38 |
-| **Total** | **1,432** | **100.0%** | **1,316** |
+| **Interim-basis total** | **1,432** | **100.0%** | **1,316** |
+
+**FINAL exclusion:** 43 core-input instances (3.0%) in 38 rows. Only those rows are excluded by the final rule.
 
 **Description signal (overlapping with the table above).** 1,389 of 1,432 missing-parameter instances (97.0%) have a description that documents a default or optional fallback; 43 have no such language. Literal `default` keys among the missing parameters: 0 (zero by construction). These were the interim heuristic's contested cases: the descriptor has no `default` key, but its own text says a fallback exists. The FINAL rule classifies them as optional-by-description and keeps their rows.
 
@@ -214,17 +216,14 @@ The required-arguments rule is **description-aware refinement**. A row is exclud
 1. **filter/pagination/sort** — the parameter name matches
 
    ```
-   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|
-   order|order_by|descending|ascending|skip|cursor|top)(?:$|_)
+   (?:^|_)(?:filter|filters|limit|offset|page|per_page|sort|sort_by|order|order_by|descending|ascending|skip|cursor|top)(?:$|_)
    ```
 
    with `re.IGNORECASE`; **or**
 2. **optional-by-description** — the parameter description matches
 
    ```
-   \boptional\b|\bdefaults?\b|\bdefault\s+(?:is|to|values?)\b
-   |\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b
-   |\bnot\s+required\b|\bcan\s+be\b
+   \boptional\b|\bdefaults?\b|\bdefault\s+(?:is|to|values?)\b|\bif\s+(?:provided|specified|given|omitted|not\s+provided|none)\b|\bnot\s+required\b|\bcan\s+be\b
    ```
 
    with `re.IGNORECASE`.

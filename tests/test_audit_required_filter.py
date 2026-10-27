@@ -12,15 +12,18 @@ import json
 import pytest
 
 from audit_required_filter import (
-    CATEGORY_CORE,
-    CATEGORY_FILTER,
-    CATEGORY_OPTIONAL,
     analyze_required_filter,
-    categorize_parameter,
     render_markdown,
     sample_indices,
 )
-from select_candidates import analyze, normalize_parameters
+from select_candidates import (
+    CATEGORY_CORE,
+    CATEGORY_FILTER,
+    CATEGORY_OPTIONAL,
+    analyze,
+    categorize_parameter,
+    normalize_parameters,
+)
 
 
 def param(description: str) -> dict:
@@ -117,6 +120,7 @@ def test_analysis_reproduces_structure_and_categories() -> None:
     assert report.single_tool_counts["sort_numbers"] == 1
     assert report.interim_filtered_single_tool_counts.get("sort_numbers", 0) == 0
     assert report.refined_filtered_single_tool_counts["sort_numbers"] == 1
+
 
 def test_analysis_counts_other_arguments_and_empty_calls() -> None:
     rows = [
