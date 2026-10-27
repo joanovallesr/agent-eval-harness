@@ -14,7 +14,7 @@ elsewhere and are not decided here.
 - sha256 of `"\n".join(candidates)` (no trailing newline):
   `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`.
 - Generator code commit:
-  `7f8e797c48c2a8d094e5b155c36c2988c2be3f3a` (`scripts/select_candidates.py`).
+  `847a7de4c8e842087ed3a87c12d9b681ac57ce87` (`scripts/select_candidates.py`).
 
 ## Eligibility filters
 
