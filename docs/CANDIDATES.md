@@ -35,9 +35,13 @@ Applied in this order, before the split is materialized:
    `param -> {type, description, default?}`, a parameter without a `default`
    is required; a nested JSON-Schema `properties`/`required` form is also
    handled defensively. The pinned revision has **168,870 flat tool
-   declarations and zero nested declarations**. The filter removes 1,316 rows
-   globally (11 with entirely empty arguments where required parameters
-   exist) and **zero single-tool candidate rows**.
+   declarations and zero nested declarations**. The public card describes a
+   `required` boolean, but the pinned revision has **zero** `required` keys in
+   its 362,482 parameter descriptors; absence of `default` is therefore the
+   operative required signal. This discrepancy is flagged for owner sign-off
+   before pre-registration. The filter removes 1,316 rows globally (11 with
+   entirely empty arguments where required parameters exist) and **zero
+   single-tool candidate rows**.
 5. **Eligibility floor.** A tool is eligible when it has **at least 100
    single-tool cases** after filters 1–4.
 

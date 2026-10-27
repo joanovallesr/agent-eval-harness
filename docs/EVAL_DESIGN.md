@@ -157,12 +157,13 @@ it.
   at download** (reference: `26d14ebfe18b1f7b524bd39b404b50af5dc97866`,
   2025-01-24 — the July 2024 regeneration means bare "xLAM-60k" is not a fixed
   artifact). Record the pinned hash in `data/README.md`.
-- **License/redistribution:** the Hub tag reads `cc-by-4.0` and access is
-  click-through (`gated: auto`), but **neither the dataset-card license nor the
-  accepted use terms have been verified for republication**. Read both before
-  any dataset row appears on a public site or in a public repo. Until then:
-  dashboard traces use hand-written tasks and model outputs only, or link to
-  the dataset.
+- **License/redistribution:** public card read 2026-10-26: Hub tag
+  `cc-by-4.0`, gated click-through, APIGen citation requested, and a
+  "research purposes only" note. The drafted verdict and open questions are in
+  `data/README.md`. These terms are **not yet confirmed for republication**;
+  until the owner confirms the accepted click-through terms, no raw dataset
+  row, query, gold answer, full tool schema, or reproducing trace is published.
+  Aggregates, counts, tool names, and hand-written tasks are safe.
 - **Cluster and split unit is the tool, not the category (pivot
   2026-10-25).** xLAM rows carry only id/query/answers/tools; the "21
   categories" are the paper's API taxonomy, not a split unit. The held-out
@@ -179,10 +180,14 @@ it.
   `param -> {type, description, default?}` treats a parameter without a
   `default` as required, and a nested JSON-Schema `properties`/`required`
   form is also handled defensively. The pinned revision has 168,870 flat tool
-  declarations and zero nested declarations. The required-argument filter
-  removes 1,316 rows (11 of them with entirely empty arguments where required
-  parameters exist); none of those rows are single-tool candidate cases.
-  The candidate counts therefore survive every filter unchanged.
+  declarations and zero nested declarations. The public card describes a
+  `required` boolean, but the pinned revision has zero `required` keys in its
+  362,482 parameter descriptors; absence of `default` is the operative
+  required signal. That discrepancy is flagged for owner sign-off in
+  `data/README.md`. The required-argument filter removes 1,316 rows (11 of
+  them with entirely empty arguments where required parameters exist); none
+  of those rows are single-tool candidate cases. The candidate counts
+  therefore survive every filter unchanged.
 - **Mixed cases are excluded and counted.** A case whose gold calls include
   both a candidate held-out tool and a non-candidate tool is excluded from
   the candidate counts; on the pinned revision that is 1,270 cases. A case
