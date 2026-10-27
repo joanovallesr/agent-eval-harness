@@ -1,0 +1,472 @@
+# Eval Design
+
+The eval plan for the Agent + Eval Harness. Locked by a grill session on
+2026-10-23 (decisions recorded in `PROJECT_PLAN.md`). The code implements this
+document, not the other way around. Anything that changes a locked decision
+re-opens the grill for that branch.
+
+## 0. Pre-registration — read first
+
+Nothing is run on the held-out set until `docs/PRE_REGISTRATION.md` is
+committed **and git-tagged**. "Dated and committed" must be verifiable; the tag
+is the proof. Required contents (see section 13):
+
+- the hypothesis, the non-inferiority margin, the assumed true gap
+- cost definition (what counts, pricing basis)
+- model IDs, effort values, prompt versions, tool schemas, `max_tokens`
+- match-spec version
+- k (repeats) per arm, with the budget arithmetic closed
+- analysis plan: estimator, bootstrap resamples, cost-ratio definition
+- which comparison is primary, which are secondary
+- **abort rule:** resuming from a checkpoint is allowed; restarting after
+  seeing partial results is forbidden
+- **analysis pipeline dry run:** the full pipeline (estimator, both intervals,
+  cost ratio, results-JSON writer) runs on dev outputs and produces a dev
+  RESULTS draft **before** the tag — the held-out run happens once
+
+## 1. The claim
+
+**Non-inferiority on cost parity.** The Haiku agent loop matches a
+Sonnet-5.5 direct-prompt baseline on single-turn tool-calling accuracy, at no
+more than one-tenth the token cost.
+
+Formally: let `d_c` = mean paired difference (`haiku-agent` −
+`sonnet-direct`) in held-out category `c`, averaged over `n_c` cases with
+the **same `n_c` in every category** (repeats averaged within a case first).
+The estimand is the **equal-weighted average over categories**,
+`d̄ = (1/C)·Σ_c d_c` — which, with equal `n_c`, coincides with the pooled
+per-case mean. Non-inferiority is declared if the lower bound of the 95%
+t-interval `d̄ ± t(0.975, C−1)·s_cat/√C` stays above **−5 points**
+(section 7), and the cost ratio (Haiku-agent list-price token cost per task
+÷ Sonnet-direct list-price token cost per task) clears its pre-registered
+rule: the **upper bound of the 95% t-interval on per-category log cost
+ratios ≤ 0.10** (exponentiated back to ratio scale), interval reported
+alongside, with a case-level bootstrap as sensitivity check. (A category
+bootstrap is avoided here for the same few-clusters reason as in §7.)
+
+Language rule: Sonnet 5.5 is "a mid-tier model, ~20x pricier per token." It is
+never called "frontier" in the README, the resume, or the report. Anthropic has
+tiers above it; the claim must not overstate the baseline.
+
+## 2. The arms
+
+| Arm | Model | What it does |
+|---|---|---|
+| `sonnet-direct` | Sonnet 5.5 (pinned ID) | Single direct prompt, no loop. The comparison arm. |
+| `haiku-direct` | Haiku 5.5 (pinned ID) | Single direct prompt, no loop. Isolates whether parity comes from Haiku being good at the task vs from the loop. |
+| `haiku-agent` | Haiku 5.5 (pinned ID) | The agent loop (section 3). |
+
+The router arm was cut from v1 in the 2026-10-23 review: on xLAM the only
+non-ground-truth gate is schema validation, which makes a router nearly
+identical to `haiku-agent` with a fallback. It remains a v2 candidate.
+
+- **Model IDs are pinned at first use and recorded in every results file.**
+  Starting points (verify, then pin): `claude-haiku-5-5`, `claude-sonnet-5-5`,
+  judge `gpt-6-luna` (ID as listed on OpenAI's pricing page 2026-10-23; pricing
+  $0.10/$0.50 per MTok verified same day).
+- **Effort is fixed per arm and recorded.** Allowed values run low to max.
+  The selection rule is pre-specified — choosing after seeing dev slices is
+  fine; the rule itself is not:
+  - `sonnet-direct`: the API default effort, or its strongest dev-slice
+    configuration — whichever scores higher on the slice. The baseline is
+    never weakened to make non-inferiority easier.
+  - Haiku arms (one effort for both, so the loop comparison holds effort
+    fixed): the lowest effort whose dev-slice accuracy is within a
+    pre-registered tolerance (e.g. 2 points) of Haiku's best effort on the
+    slice. Lower effort protects the cost claim; the tolerance protects
+    accuracy.
+  - The rule and tolerance are recorded in pre-registration. Verify logged
+    tokens include thinking tokens — effort spends through them.
+- **Primary comparison:** `haiku-agent` vs `sonnet-direct`. Everything else is
+  secondary: reported with intervals, **no pass/fail framing** (this avoids
+  multiple-comparison fishing).
+- **Tool-use interface (pinned):** the standard `tool_use` interface, with
+  **no server-side schema enforcement** — the harness validates each emitted
+  call against the tool's `input_schema` itself, and validation failures feed
+  the repair retry (section 3). If the API enforced schemas, the loop would
+  have nothing to repair.
+- **Pre-registered expectation:** `haiku-agent` and `haiku-direct` may differ
+  little — most single-turn calls are well-formed on the first try. The
+  **retry rate is a reported metric**: a near-zero retry rate makes the loop
+  comparison vacuous, which is itself a finding, not a failure.
+- Optional, budget permitting: a small Opus spot-check (~50 cases) to show
+  whether Sonnet is near the ceiling.
+
+## 3. What the agent loop does on single-turn data
+
+This was the biggest hole in the original plan, and it is now closed by
+definition. xLAM rows carry no executable tools, so a naive "loop" would be
+identical to direct prompting and the `haiku-direct` comparison would be
+vacuous. The loop's added value on xLAM is **mechanical repair**:
+
+1. Generate the tool call(s) for the query.
+2. Validate every call against the tool's JSON schema (types, required fields,
+   enums).
+3. On validation failure, feed the validation error back to the model and
+   retry — capped at 2 retries, then the last attempt stands.
+4. Score what came out. Done.
+
+**Hard constraint:** the loop NEVER consults ground truth or the exact-match
+scorer to decide whether to retry. The retry signal is schema validation only —
+feedback the agent would actually have in deployment. (The old router lab's rule
+"the gate equals the final criterion" is the opposite situation; it does not
+carry over here.)
+
+Out of scope for v1: mock tool execution. 3,673 synthetic APIs cannot be
+faithfully mocked, and an LLM-as-mock would be circular. The rich loop
+behaviors (chaining, context use, recovery from observations) are exercised on
+the hand-written multi-step set — the secondary question (section 9).
+
+## 4. Failure policy — symmetric across arms, decided in advance
+
+| Event | Treatment |
+|---|---|
+| API error (5xx), timeout | Retry identically on every arm, cap 2. Then count as failure. |
+| Refusal | Count as failure. |
+| Malformed output (unparseable tool call) | Count as failure. (`haiku-direct` gets no repair loop; that is the point of the comparison.) |
+| `max_tokens` truncation | Count as failure. |
+| Schema-validation failure after retries exhausted | Count as failure. |
+
+Default: everything above counts as a failure. **Any exclusion must be
+pre-registered** (section 13). No post-hoc reclassification. The policy table
+is drafted against observed dev failures in Phase 3 and **frozen in
+pre-registration** — dev failures may be viewed freely once the Phase-0
+category assignment is frozen (section 5).
+
+## 5. Benchmark, splits, and filters
+
+- **Dataset:** `Salesforce/xlam-function-calling-60k`. **Pin the exact revision
+  at download** (reference: `26d14ebfe18b1f7b524bd39b404b50af5dc97866`,
+  2025-01-24 — the July 2024 regeneration means bare "xLAM-60k" is not a fixed
+  artifact). Record the pinned hash in `data/README.md`.
+- **License/redistribution:** the Hub tag reads `cc-by-4.0` and access is
+  click-through (`gated: auto`), but **neither the dataset-card license nor the
+  accepted use terms have been verified for republication**. Read both before
+  any dataset row appears on a public site or in a public repo. Until then:
+  dashboard traces use hand-written tasks and model outputs only, or link to
+  the dataset.
+- **Invalid-row filters — defined before the split freezes, applied before it:**
+  function name in `answers` not present in `tools`; required arguments empty;
+  `answers` empty where a call is expected. (Community discussion flagged ~472
+  invalid + ~1,166 wrongly-empty rows; verify counts at download.)
+- **Categories are derived, then frozen.** xLAM rows carry only
+  id/query/answers/tools — no category label (the "21 categories" are the
+  paper's API taxonomy). Phase 0 checks the dataset viewer: if tool names
+  carry a consistent category prefix, the prefix is the category; otherwise
+  a derivation rule is written and documented **before any results exist**.
+  (The `math_toolkit.` prefix example is unverified — confirm against real
+  tool names in the viewer.)
+- **Leak, operationally:** the same tool name appearing in both splits counts
+  as a leak, even if the derived categories differ. Category disjointness is
+  the design; tool-name disjointness is the check. **Run the leak check in
+  Phase 0** — it needs only dataset structure. With C ≥ 6 drawn from 8
+  candidates, two leaks can be absorbed: a leaking selected category is
+  replaced by the next ordered candidate (pre-registered replacement rule);
+  if candidates are exhausted below C = 6, invoke the §7 fallback selection.
+- **Freeze order (corrected 2026-10-23):** Phase 0 freezes an **ordered list
+  of 8 candidate held-out categories** (seeded, sha256-hashed, committed).
+  Dev work — including viewing dev failures — is free afterward. Phase 4
+  materializes the test rows deterministically from the Phase-0 seeds,
+  verifies the sizing target against post-filter usable rows, and records
+  checksums. The failure policy freezes in pre-registration, not before dev.
+- **Usable rows are counted before the tag.** Filters depend only on dataset
+  structure, not model outputs, so Phase 0 computes usable-row counts per
+  candidate category. Pre-registration sets `n_c` at or below the smallest
+  available count across the selected categories. If the sizing target needs
+  more than the minimum available, pre-reg either raises C or recomputes the
+  power check at the achievable `n_c` and picks a §7 fallback if it fails.
+- **Within-category sampling:** seeded uniform random; seeds committed in
+  Phase 0. The split must yield enough usable test rows to meet the sizing
+  target (section 7) *after* filtering.
+- **Mini-set:** ~20 hand-written tasks. Pipeline smoke test and the seed of the
+  multi-step set. **Excluded from every reported headline number.**
+- **Multi-step set:** ~30 hand-written tasks, each shipping with deterministic
+  mock tool implementations authored alongside it. This is the secondary
+  question's data and the judge's only territory (section 9).
+
+## 6. Scoring — the checker is the single point of failure
+
+The match spec is written **before** the scorer, as `docs/MATCH_SPEC.md`. It
+must define:
+
+- **Argument types:** coercion rules (is `"5"` the same as `5`? is `5.0` the
+  same as `5`?). No silent leniency — every rule explicit.
+- **Parallel-call ordering:** order-insensitive unless a data dependency exists
+  between calls.
+- **Optional arguments:** missing optional = fine; unexpected extra args =
+  defined (fail or ignore — pick one, write it down).
+- **String case:** case-insensitive for enums; exact otherwise (or whatever the
+  domain justifies — written per rule, not per case).
+- **Numeric equivalence:** tolerance or exact decimal comparison, stated.
+
+Then the scorer is **tested against hand-made right and wrong pairs** covering
+every rule above — including adversarial near-misses — before it scores
+anything real. These pair tests are required CI from day one.
+
+**Deterministic partial credit** (no LLM involved): right tool (0/1), then
+per-field argument score. The combination formula lives in the match spec.
+
+Primary metric: **mean exact-match accuracy**, repeats averaged within a
+case first (section 1). `pass@k` comes from the pre-registered repeats and is
+reported separately as a secondary.
+
+## 7. Sizing — power under clustering
+
+The final interval clusters by category, so the sizing is about
+**categories**, not cases. (Two earlier drafts were corrected 2026-10-23:
+sizing for interval width alone passes only ~50% of the time at true
+equality, and a case-level formula assumes independent cases that the
+clustered analysis does not have. Both are replaced below.)
+
+- Let `d_c` = mean paired difference (agent − sonnet) in held-out category
+  `c`, averaged over cases with repeats averaged within a case first.
+- **Primary interval:** t-interval on the `d_c`:
+  `d̄ ± t(0.975, C−1) · s_cat / √C`, where `s_cat` = sample SD of the `d_c`
+  and `C` = number of held-out categories. A case-level (unclustered)
+  bootstrap CI is reported alongside as a sensitivity check; if they
+  disagree substantially, say so — the clustered interval governs.
+- Non-inferiority: the t-interval's **lower bound above −δ** (δ = 0.05).
+- **Sign convention (locked 2026-10-23):** Δ = assumed true mean difference,
+  **signed** (agent − sonnet). Δ = 0 is the default; Δ = −0.02 means "we
+  assume the agent is 2 points worse." The pre-registration states Δ and
+  this convention in words — never as a bare number.
+- ~80% power needs
+
+  `(t(0.975, C−1) + t(0.80, C−1)) · s_cat / √C < δ + Δ`
+
+  with Δ signed. Worked meaning: at fixed C, a 2-point assumed shortfall
+  (Δ = −0.02) demands (0.05/0.03)^2 ≈ 2.8× the effective sample size —
+  equivalently, s_cat must be ~0.6× as large, so the C = 8 bar of 4.3 points
+  drops to ~2.6 points. That is demanding: run the feasibility check against
+  the LOCO estimate early (Phase 3), before pre-registration. (The previous
+  draft wrote δ + Δ while describing Δ as a positive gap — that sign error
+  would have *halved* n exactly when it matters most.)
+- **If Δ ≤ −δ, no n establishes non-inferiority.** The pre-registration then
+  chooses, before any test data: a wider margin justified a priori, lower
+  power stated openly, or the binary framing dropped in favor of reporting
+  the interval. Never chosen after seeing test results — choosing on dev
+  LOCO evidence is intended and fine.
+- `s_cat` is estimated by **leave-one-category-out on dev**: per-category
+  mean differences across dev categories, SD across them. **Size to the
+  pessimistic end** of that spread — dev categories differ from test
+  categories, so dev's variance may not carry over.
+- **Variance components (corrected 2026-10-23).** The LOCO spread mixes two
+  things: true between-category variance τ² and within-category sampling
+  noise at dev's per-category n. Separate them:
+  - `τ̂² = max(0, observed_LOCO_var − mean_c(σ²_within,c / n_dev,c))`,
+    where σ²_within,c is the within-category variance of per-case paired
+    differences (repeats averaged first).
+  - Predicted test-time spread: `s_pred² = τ̂² + σ²_within / n_c`.
+  - The pessimistic uplift applies to the **τ̂ component only** (the part
+    estimated from ~13 categories; the within-category part rests on
+    hundreds of cases): `s_pess² = (u·τ̂)² + σ²_within/n_c`,
+    `u = √((m−1)/χ²_{0.20, m−1})`, m = dev categories in LOCO. χ²_{0.20, m−1}
+    denotes the lower-20% quantile (P(X ≤ x) = 0.20), so this is an 80%
+    upper confidence limit; computed u ≈ 1.24 at m = 13.
+  - The power inequality uses s_pess. (Plugging the mixed LOCO SD straight
+    in inflates s by ~12% under the n_c rule below — small, but the
+    components version is the right derivation.)
+  - If τ̂² ≈ 0, use the 100-case floor for n_c and note the interval is
+    within-noise-driven.
+- **C-selection rule (pre-registered, no discretion):** the smallest C in
+  {6, 7, 8} that (a) passes the power inequality at the pessimistic s_pess
+  and (b) fits the budget ledger. A larger C always helps the interval, so
+  the trade-off is only dev categories and cost. If even C = 8 fails (a),
+  pre-registration names one §7 fallback (wider margin / lower power / drop
+  binary framing), chosen on dev evidence. Worked check: at C = 6 the
+  t-quantiles sum to 2.571 + 0.920 = 3.491, so 80% power at Δ = 0 needs
+  s_pess < 3.5 points; at C = 8 the bar is s_pess < 4.3 points.
+- **One `n_c` for every held-out category** — the max of the per-category
+  requirements, floor 100 usable cases — so the pooled per-case mean
+  coincides with §1's equal-weighted estimand. Per-category requirement:
+  within-category SE ≤ τ̂/2 (i.e. `n_c ≥ 4 · σ²_within / τ̂²`), using the
+  between-category component, not the mixed spread.
+  Adding cases within a category does not narrow the clustered interval —
+  only more categories (or less between-category spread) do.
+- **Dev variance is measured at the final k.** Averaging repeats changes
+  per-case variance, so sizing from a different k would mislead.
+- **Report the interval and what it excludes**, not just a binary pass/fail.
+
+## 8. Repeats and the budget
+
+- **Pilot first — Phase 3 opens with this.** ~30 cases per arm at k = 1
+  (pilot ceiling $1, pure measurement, no pre-registration needed), drawn
+  only from non-candidate categories — the 8 frozen candidates are held out
+  from all dev work. Measure real tokens and cost per case per arm, failure
+  modes, retry rate. From the
+  pilot: choose k, then define the dev sample (seeded, stratified by
+  category, fixed size, non-candidate categories only) — each with its own
+  spend ceiling. The ledger records dev spend after the fact, so it cannot
+  prevent an overrun; the **ceilings** prevent it.
+- **Cost feasibility gate, right after the pilot.** Compute the pilot cost
+  ratio (haiku-agent ÷ sonnet-direct, list price). If it already exceeds
+  0.10 at the pilot efforts, the cost claim fails regardless of accuracy —
+  redesign (effort, loop budget) or drop the cost claim **before** spending
+  the dev budget.
+- `k` (repeats per arm) is chosen after the pilot and frozen for the dev
+  run, then **pre-registered** unchanged — unless new dev evidence forces a
+  change, in which case the variance inputs are re-measured at the new k.
+  Token counts come from **real dev measurement** (xLAM prompts may be far
+  smaller than 5k tokens — do not size the budget on guesses). The test-spend
+  term is `sum_over_arms(C * n_c * k_arm * measured_cost_per_case)`.
+- If it doesn't close, pick **one** of these in pre-registration — never after
+  seeing results: a wider margin justified a priori, lower power stated openly,
+  or a higher cap.
+- **$20 hard cap.** Per-arm budget lines set after dev measurement.
+- **One ledger across all phases.** The pre-registration shows the inequality
+  closed on actuals:
+
+  `20.00 − pilot − effort_slices − dev_spend − judge_spend − multistep_traces
+  − opus_spot − ci_spend − reserve ≥ test_spend`
+
+  where `reserve` = the cost of one full aborted-and-resumed test run on the
+  most expensive arm. The ledger is updated with actuals after every phase;
+  the test run does not start until the inequality holds.
+- Cost is computed from **logged API usage, never token estimates**. The
+  harness aborts loudly at the ceiling, checkpoints so an aborted run isn't
+  wasted, and aborted runs are **recorded, not deleted**.
+- **One pricing basis for every arm:** cost ratios from logged tokens at **list
+  price**; actual spend reported separately. (Batch is discounted — mixing
+  batch spend for Sonnet with list spend for Haiku would distort the 1/10
+  comparison.)
+- Batch API: **direct-prompt passes only** (the agent loop is sequential and
+  can't batch). Batch runs carry no meaningful latency — **latency numbers come
+  from synchronous runs only**.
+- Second line of defense: a provider-console spend limit, if available.
+
+## 9. The judge — secondary question only
+
+The judge serves the multi-step set, **not the headline claim**. A bad κ cannot
+sink the cost-parity result — that is what makes the time-box safe.
+
+- Model: GPT-6 Luna — **different family from the agent** (non-negotiable).
+- ~60 hand labels, split **by task: ~15 tune tasks / ~15 report tasks**
+  (~2 traces each). Splitting by trace would let the same task land in both
+  sets. The report set stays untouched until final scoring. "One calibration
+  round" = one judge-prompt revision, defined up front — tuning against the
+  report set inflates κ.
+- **Trace generation is a phase step, not an afterthought:** the loop runs
+  with **both models** on the multi-step set (`haiku-agent`, `sonnet-agent`)
+  — same loop code, different model. A direct (no-loop) arm cannot chain
+  calls it never sees results for; it would fail by construction and tell
+  nothing, so it does not run here. Batch is unusable for loop runs
+  (sequential calls). The label sample is drawn stratified across the two
+  loop arms and repeats so no task is over-represented.
+- **Written rubric before labeling; blind** (arm identity hidden). ~15 traces
+  from the report set relabeled a week later: our own consistency is the
+  realistic ceiling for judge agreement, and it's cheap to measure.
+- Report **κ with its 95% CI**. With ~30 report labels the interval is wide
+  — roughly ±0.25 or more around the point estimate — so the threshold is a
+  decision rule, not proof. Watch class balance: if 90% of traces pass, κ
+  is unstable.
+- **Mind clustering:** 60 traces from ~30 tasks are not 60 independent
+  samples. Say in the writeup that the effective sample is smaller.
+- **Ship rule: point estimate ≥ 0.70, CI reported alongside.** The resume
+  bullet states the measured κ and n **whether or not it clears 0.70** — with
+  a ~30-label report set the interval is wide either way, and the number must
+  not imply a calibrated judge when it isn't one.
+
+## 10. CI gate
+
+**Required from day one:** lint, scorer unit tests (including the hand-made
+right/wrong pairs), and all other offline checks.
+
+**The LLM-backed gate starts advisory** and is promoted to required only after
+its false-alarm rate is measured:
+
+- Runs a small pinned dev subset (~50 cases) on the Haiku arms only, per PR.
+- Fails only when exact-match drops more than a **tolerance band measured from
+  repeated runs on unchanged code** (temperature is not adjustable on these
+  models, so empirical noise measurement is the only option).
+- **Rerun once on failure; fail only if both runs fall below the band.**
+- Pin everything: model ID, effort, prompt version, tool schemas. Reference
+  score stored in the repo, changed only deliberately.
+- **Honest sensitivity, documented:** on 50 cases one case is 2 points. This
+  gate is a smoke detector for large regressions; it will miss a 3-point drop.
+  Gate runs are **never reported as experimental results**.
+- Keep the gate subset **separate from the final test split** (drawn from dev;
+  expect to overfit it under heavy iteration).
+- **Protect the key:** dedicated CI key with its own low spend limit; untrusted
+  PRs cannot read repository secrets. The harness per-PR cost ceiling is a
+  second line of defense, not the only one.
+- The Sonnet arm stays on **manual milestone runs**. (~$0.05 per 50-case Haiku
+  gate run: negligible.)
+
+## 11. Reporting
+
+- `docs/RESULTS.md` is the record. The README summary table is **generated
+  from the same results JSON** — the two cannot drift.
+- **"Negative result" is defined up front:** the primary comparison missing
+  the non-inferiority margin, a κ miss, a budget abort — reported with the
+  same prominence as the wins. The margin applies to the primary comparison
+  only; secondaries get intervals, never pass/fail.
+- **Limitations section, mandatory:** held-out xLAM categories test shift
+  *within one synthetic generator*. That is not real-world generalization;
+  say so.
+- v2 candidates: BFCL as an external check, a larger multi-step set.
+
+## 12. Dashboard
+
+Static Next.js export on Vercel. **The frontend only renders; the harness
+computes.** CIs, p95s, costs, taxonomy counts are calculated once in Python and
+written to the committed results JSON, which is a **versioned contract**:
+every file carries run ID, git commit, model IDs, effort settings, prompt
+versions, and dev-vs-final labeling. Never mix dev and final numbers on one
+chart unlabeled.
+
+- Build **late, time-boxed**, after real dev results exist — the UI is designed
+  around actual data shapes, not stubs. The dashboard is not the contribution;
+  the experiment is.
+- Traces: sampled subset only, scrubbed, and only after the license/terms
+  verification in section 5 clears. Negative results and the dev-vs-final
+  distinction get the same prominence as the wins.
+- Stretch goal is **replay, not live**: stream a pre-recorded trace with
+  simulated pacing. Costs nothing, needs no backend, labeled honestly as
+  "recorded run."
+
+## 13. Pre-registration contents
+
+`docs/PRE_REGISTRATION.md`, committed and git-tagged before the test split is
+touched:
+
+1. Hypothesis, margin (δ = 0.05), assumed true gap Δ **with the sign
+   convention stated in words** (Δ signed, agent − sonnet; Δ = −0.02 means
+   "we assume the agent is 2 points worse")
+2. Cost definition: what counts (every agent API call incl. retries), pricing
+   basis (list), spend reported separately
+3. Model IDs (all arms + judge), effort values **plus the pre-specified
+   selection rule and tolerance** (section 2), prompt versions, tool schemas,
+   `max_tokens`, **tool-use interface pin** (no server-side schema
+   enforcement; harness validates)
+4. Match-spec version
+5. k per arm + the ledger inequality closed on actuals
+   (`20.00 − pilot − effort_slices − dev − judge − multistep_traces
+   − opus_spot − CI − reserve ≥ test`), or the chosen fallback:
+   wider margin justified a priori / lower power stated openly / higher cap
+6. Analysis plan: t-interval estimator on per-category mean differences,
+   case-level bootstrap as sensitivity check, cost-ratio definition (upper
+   bound of the 95% t-interval on per-category log cost ratios ≤ 0.10),
+   sizing inputs (variance components: τ̂², σ²_within, LOCO spread with the
+   pessimistic upper-limit rule, C-selection rule outcome, Δ with sign
+   convention) and the resulting C and n_c
+7. Primary comparison (`haiku-agent` vs `sonnet-direct`); secondary
+   (`haiku-direct`) with intervals only, no pass/fail
+8. Failure-policy table (section 4) and any pre-registered exclusions
+9. Sampling: the 8 ordered candidate held-out categories (from Phase 0),
+   usable-row counts per candidate (computed Phase 0), the selected C with
+   reason, within-category seeds, filter definitions
+
+## 14. What "done" looks like
+
+- Pre-registration tagged before the test rows are materialized (candidate
+  categories frozen since Phase 0).
+- Analysis pipeline validated end-to-end on dev outputs before the tag.
+- Agent runs end-to-end on dev, test, and multi-step sets from one command.
+- Results: the paired interval, the cost ratio, CIs attached, negative results
+  reported at equal prominence.
+- Judge: κ with CI reported; ship rule applied as defined, miss handled as
+  defined.
+- CI gate green on main; a deliberately broken prompt change fails the gate
+  (test the test) — after the advisory period.
+- Dashboard live, rendering the versioned results JSON.
+- The one before→after pair the resume bullet claims, measured, not estimated.

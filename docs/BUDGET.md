@@ -1,0 +1,31 @@
+# Budget Ledger — Agent + Eval Harness
+
+Hard cap: **$20.00** for the entire project, all phases.
+
+## The inequality (must hold on actuals before the test run starts)
+
+```
+20.00 − pilot − effort_slices − dev_spend − judge_spend − multistep_traces
+      − opus_spot − ci_spend − reserve ≥ test_spend
+```
+
+`reserve` = cost of one full aborted-and-resumed test run on the most
+expensive arm. Costs from **logged API usage**, never estimates. Cost ratios
+use list-price token costs; actual spend is reported separately.
+
+## Running actuals
+
+| Line | Ceiling | Actual | Notes |
+|---|---|---|---|
+| pilot (~30 cases/arm, k=1) | $1.00 | — | pure measurement |
+| effort_slices | — | — | set from pilot |
+| dev_spend | — | — | set from pilot |
+| judge_spend (GPT-6 Luna) | — | — | labels + calibration |
+| multistep_traces (haiku-agent + sonnet-agent) | — | — | ~30 tasks × 2 models |
+| opus_spot (~50 cases, optional) | — | — | only if budget allows |
+| ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
+| reserve (1 aborted+resumed test run) | — | — | most expensive arm |
+| **test_spend** | — | — | `C · n_c · k · measured_cost/case` |
+
+Second line of defense: a provider-console spend limit (set up in Phase 2).
+The harness per-run ceiling is the third.
