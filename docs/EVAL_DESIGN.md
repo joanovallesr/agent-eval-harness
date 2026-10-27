@@ -119,19 +119,37 @@ the hand-written multi-step set — the secondary question (section 9).
 
 ## 4. Failure policy — symmetric across arms, decided in advance
 
+Two retry kinds are distinct and must not be conflated:
+
+- **Infrastructure retries** (API 5xx, timeout) apply identically to every
+  arm, cap 2. After the cap the event counts as a failure.
+- **Schema-repair retries** apply to `haiku-agent` only, cap 2. The retry
+  signal is schema validation of the emitted call — never gold and never the
+  scorer (section 3). Direct arms get no schema-repair retries.
+
 | Event | Treatment |
 |---|---|
-| API error (5xx), timeout | Retry identically on every arm, cap 2. Then count as failure. |
+| API error (5xx), timeout | Infrastructure retry identically on every arm, cap 2. Then count as failure. |
 | Refusal | Count as failure. |
-| Malformed output (unparseable tool call) | Count as failure. (`haiku-direct` gets no repair loop; that is the point of the comparison.) |
+| Text-only reply | `haiku-agent`: schema-validation failure, schema-repair retry. Direct arms: terminal 0. |
+| Malformed output (unparseable tool call) | Count as failure. `haiku-agent` may repair if schema validation identifies it; direct arms get no repair. |
 | `max_tokens` truncation | Count as failure. |
-| Schema-validation failure after retries exhausted | Count as failure. |
+| Schema-validation failure after retries exhausted | Scores 0. |
+| Schema-validation failure after retries exhausted, but the emitted call equals gold | Scores 0. This combination signals a schema/gold inconsistency and must be investigated. |
 
 Default: everything above counts as a failure. **Any exclusion must be
 pre-registered** (section 13). No post-hoc reclassification. The policy table
 is drafted against observed dev failures in Phase 3 and **frozen in
 pre-registration** — dev failures may be viewed freely once the Phase-0
-category assignment is frozen (section 5).
+held-out tool list is frozen (section 5).
+
+**Precedence rule.** A schema-validation failure after retries are exhausted
+scores 0 even if the emitted call happens to equal gold. Scoring it as a win
+would hide a contradiction between the schema and the gold label; such a case
+must be investigated instead. The **format-failure rate per arm** (no
+`tool_use` blocks, malformed blocks, schema-validation failures after
+retries) is reported as a diagnostic **alongside** that score, not instead of
+it.
 
 ## 5. Benchmark, splits, and filters
 
@@ -184,31 +202,24 @@ category assignment is frozen (section 5).
   mock tool implementations authored alongside it. This is the secondary
   question's data and the judge's only territory (section 9).
 
-## 6. Scoring — the checker is the single point of failure
+## 6. Scoring — MATCH_SPEC is the sole authority
 
-The match spec is written **before** the scorer, as `docs/MATCH_SPEC.md`. It
-must define:
+**`docs/MATCH_SPEC.md` is the sole authority on exact match and partial
+credit. This section defines only the metric and the required tests; it does
+not restate or override a scoring rule.** If this section and the match spec
+ever disagree, the match spec governs.
 
-- **Argument types:** coercion rules (is `"5"` the same as `5`? is `5.0` the
-  same as `5`?). No silent leniency — every rule explicit.
-- **Parallel-call ordering:** order-insensitive unless a data dependency exists
-  between calls.
-- **Optional arguments:** missing optional = fine; unexpected extra args =
-  defined (fail or ignore — pick one, write it down).
-- **String case:** case-insensitive for enums; exact otherwise (or whatever the
-  domain justifies — written per rule, not per case).
-- **Numeric equivalence:** tolerance or exact decimal comparison, stated.
-
-Then the scorer is **tested against hand-made right and wrong pairs** covering
-every rule above — including adversarial near-misses — before it scores
-anything real. These pair tests are required CI from day one.
-
-**Deterministic partial credit** (no LLM involved): right tool (0/1), then
-per-field argument score. The combination formula lives in the match spec.
-
-Primary metric: **mean exact-match accuracy**, repeats averaged within a
-case first (section 1). `pass@k` comes from the pre-registered repeats and is
-reported separately as a secondary.
+- Primary metric: **mean exact-match accuracy**, repeats averaged within a
+  case first (section 1).
+- Partial credit (secondary), name-only accuracy, and the lenient-string
+  variant are defined in MATCH_SPEC §7. No other scoring rule is defined
+  here.
+- `pass@k` comes from the pre-registered repeats and is reported separately
+  as a secondary.
+- The scorer is **tested against hand-made right and wrong pairs** covering
+  every MATCH_SPEC rule — including adversarial near-misses — before it
+  scores anything real. These pair tests are required CI from day one
+  (MATCH_SPEC §9).
 
 ## 7. Sizing — power under clustering
 
