@@ -1,9 +1,10 @@
 """Metrics: accuracy, pass@k, cost/task, latency — with uncertainty attached.
 
 Rule: no bare percentages from small n. Every reported number carries a 95%
-confidence interval (case-level bootstrap) or comes from the paired t-interval
-on per-tool mean differences. See docs/EVAL_DESIGN.md §7 (estimator) and §10
-(CI policy).
+interval from the §7 estimator (the per-tool t-interval governs; the
+case-level bootstrap is a sensitivity check), or is an explicitly labeled
+descriptive statistic. See docs/EVAL_DESIGN.md §7 (estimator) and §10 (CI
+gate).
 
 McNemar is intentionally **not** used: the design's interval is the t-interval
 on per-tool mean paired differences, with a case-level bootstrap as a

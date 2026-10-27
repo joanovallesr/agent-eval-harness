@@ -25,6 +25,7 @@ import json
 import random
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Literal
 
 PINNED_REVISION = "26d14ebfe18b1f7b524bd39b404b50af5dc97866"
 SEED = 42
@@ -60,7 +61,7 @@ class ParameterSpec:
     required; a parameter with a ``default`` is optional.
     """
 
-    form: str
+    form: Literal["flat", "nested", "unknown"]
     all_names: frozenset[str]
     required: frozenset[str]
 
@@ -102,6 +103,9 @@ class Report:
     rows: int = 0
     distinct_tools: set[str] = field(default_factory=set)
     parameter_forms: Counter = field(default_factory=Counter)
+    parameter_descriptors: int = 0
+    parameter_descriptor_keys: Counter = field(default_factory=Counter)
+    required_key_descriptors: int = 0
     empty_answer_rows: int = 0
     bad_name_rows: int = 0
     single_tool_rows: int = 0
@@ -111,15 +115,30 @@ class Report:
     multi_tool_no_candidates: int = 0
     required_argument_rows: int = 0
     empty_arguments_where_required_rows: int = 0
+    # Structural pool: single-tool counts before the required-argument filter.
+    # The frozen order is generated from this pool, because the candidate list
+    # was locked before the required-argument filter was finalized.
     single_tool_counts: Counter = field(default_factory=Counter)
+    # Usable pool: single-tool counts after every filter, including required
+    # arguments. Candidate counts must be identical in both pools.
+    required_filtered_single_tool_counts: Counter = field(default_factory=Counter)
     candidate_single_tool_required_gaps: Counter = field(default_factory=Counter)
     distractor_all: Counter = field(default_factory=Counter)
     distractor_dev: Counter = field(default_factory=Counter)
 
     def eligible_tools(self) -> list[str]:
+        """Structural pool used to generate the frozen candidate order."""
         return sorted(
             tool
             for tool, count in self.single_tool_counts.items()
+            if count >= MIN_SINGLE_TOOL_CASES
+        )
+
+    def eligible_tools_after_all_filters(self) -> list[str]:
+        """Usable pool after every filter, including required arguments."""
+        return sorted(
+            tool
+            for tool, count in self.required_filtered_single_tool_counts.items()
             if count >= MIN_SINGLE_TOOL_CASES
         )
 
@@ -136,7 +155,24 @@ def analyze(dataset) -> Report:
         report.distinct_tools.update(tools)
 
         for tool in tools_list:
-            report.parameter_forms[normalize_parameters(tool).form] += 1
+            spec = normalize_parameters(tool)
+            report.parameter_forms[spec.form] += 1
+            parameters = tool.get("parameters")
+            if not isinstance(parameters, dict):
+                continue
+            if spec.form == "nested":
+                descriptors = parameters.get("properties", {}).values()
+            elif spec.form == "flat":
+                descriptors = parameters.values()
+            else:
+                descriptors = ()
+            for descriptor in descriptors:
+                if not isinstance(descriptor, dict):
+                    continue
+                report.parameter_descriptors += 1
+                report.parameter_descriptor_keys.update(descriptor.keys())
+                if "required" in descriptor:
+                    report.required_key_descriptors += 1
 
         if not answers:
             report.empty_answer_rows += 1
@@ -169,9 +205,10 @@ def analyze(dataset) -> Report:
             tool = names[0]
             report.single_tool_rows += 1
             report.single_tool_counts[tool] += 1
-            if tool in candidates:
-                if any_required_gap:
-                    report.candidate_single_tool_required_gaps[tool] += 1
+            if not any_required_gap:
+                report.required_filtered_single_tool_counts[tool] += 1
+            if tool in candidates and any_required_gap:
+                report.candidate_single_tool_required_gaps[tool] += 1
         else:
             report.multi_tool_rows += 1
             if distinct & candidates and distinct - candidates:
@@ -220,13 +257,26 @@ def main() -> int:
         split=args.split,
     )
     report = analyze(dataset)
-    eligible = report.eligible_tools()
-    regenerated = random.Random(SEED).sample(eligible, len(FROZEN_CANDIDATES))
+    eligible_structural = report.eligible_tools()
+    eligible_after_all = report.eligible_tools_after_all_filters()
+    regenerated = random.Random(SEED).sample(
+        eligible_structural, len(FROZEN_CANDIDATES)
+    )
     digest = hashlib.sha256("\n".join(regenerated).encode()).hexdigest()
 
-    candidate_counts = {
+    candidate_counts_structural = {
         tool: report.single_tool_counts[tool] for tool in FROZEN_CANDIDATES
     }
+    # Per-candidate counts are recomputed after every filter, including
+    # required arguments. They must equal the structural counts; otherwise
+    # the candidate would have to be flagged and covered by a spare.
+    candidate_counts = {
+        tool: report.required_filtered_single_tool_counts[tool]
+        for tool in FROZEN_CANDIDATES
+    }
+    candidate_counts_unchanged = (
+        candidate_counts_structural == candidate_counts
+    )
     below_floor = [
         tool for tool, count in candidate_counts.items()
         if count < MIN_SINGLE_TOOL_CASES
@@ -236,6 +286,9 @@ def main() -> int:
     print(f"rows: {report.rows}")
     print(f"distinct tools: {len(report.distinct_tools)}")
     print(f"parameter forms: {dict(report.parameter_forms)}")
+    print(f"parameter descriptors: {report.parameter_descriptors}")
+    print(f"parameter descriptor keys: {dict(report.parameter_descriptor_keys)}")
+    print(f"descriptors with a required key: {report.required_key_descriptors}")
     print(f"empty answer rows: {report.empty_answer_rows}")
     print(f"bad-name rows: {report.bad_name_rows}")
     print(f"single-tool rows: {report.single_tool_rows}")
@@ -254,11 +307,21 @@ def main() -> int:
         "empty-arguments-where-required rows: "
         f"{report.empty_arguments_where_required_rows}"
     )
-    print(f"eligible tools (>= {MIN_SINGLE_TOOL_CASES} single-tool cases): {len(eligible)}")
+    print(
+        "eligible tools, structural pool "
+        f"(>= {MIN_SINGLE_TOOL_CASES} single-tool cases): "
+        f"{len(eligible_structural)}"
+    )
+    print(
+        "eligible tools after all filters, including required arguments: "
+        f"{len(eligible_after_all)}"
+    )
     print(f"seed: {SEED}")
     print(f"regenerated candidates: {regenerated}")
     print(f"regenerated sha256: {digest}")
-    print(f"candidate single-tool counts: {candidate_counts}")
+    print(f"candidate single-tool counts (structural): {candidate_counts_structural}")
+    print(f"candidate single-tool counts (after all filters): {candidate_counts}")
+    print(f"candidate counts unchanged by required-argument filter: {candidate_counts_unchanged}")
     print(
         "candidate single-tool rows removed by required-argument filter: "
         f"{dict(report.candidate_single_tool_required_gaps)}"
@@ -271,10 +334,34 @@ def main() -> int:
         failures.append(
             f"revision {args.revision} != pinned {PINNED_REVISION}"
         )
+    if len(eligible_structural) != 71:
+        failures.append(
+            f"structural eligible pool {len(eligible_structural)} != 71"
+        )
+    if report.parameter_forms.get("flat") != 168_870:
+        failures.append(
+            "flat tool declarations "
+            f"{report.parameter_forms.get('flat')} != 168870"
+        )
+    if report.parameter_forms.get("nested", 0) != 0:
+        failures.append(
+            f"nested tool declarations {report.parameter_forms.get('nested')} != 0"
+        )
+    if report.required_key_descriptors != 0:
+        failures.append(
+            "parameter descriptors carry a required key: "
+            f"{report.required_key_descriptors}"
+        )
     if regenerated != FROZEN_CANDIDATES:
         failures.append("regenerated order != frozen candidate order")
     if digest != FROZEN_SHA256:
         failures.append("regenerated sha256 != frozen sha256")
+    if not candidate_counts_unchanged:
+        failures.append(
+            "required-argument filter changes candidate counts: "
+            f"structural={candidate_counts_structural} "
+            f"after_all={candidate_counts}"
+        )
     if below_floor:
         failures.append(f"candidates below the 100-case floor: {below_floor}")
     if report.candidate_single_tool_required_gaps:

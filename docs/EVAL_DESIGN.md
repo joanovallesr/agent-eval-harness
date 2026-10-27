@@ -187,7 +187,9 @@ it.
   `data/README.md`. The required-argument filter removes 1,316 rows (11 of
   them with entirely empty arguments where required parameters exist); none
   of those rows are single-tool candidate cases. The candidate counts
-  therefore survive every filter unchanged.
+  therefore survive every filter unchanged. Applying the required-argument
+  filter before tool eligibility yields 63 eligible tools; the frozen order
+  is generated from the 71-tool structural pool and is not re-rolled.
 - **Mixed cases are excluded and counted.** A case whose gold calls include
   both a candidate held-out tool and a non-candidate tool is excluded from
   the candidate counts; on the pinned revision that is 1,270 cases. A case

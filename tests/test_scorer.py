@@ -437,6 +437,21 @@ def test_parse_gold_accepts_already_parsed_lists():
     assert gold_calls[0].name == "t"
 
 
+def test_preparsed_gold_normalizes_floats_and_rejects_non_finite():
+    gold_calls = parse_gold([{"name": "t", "arguments": {"x": 0.1}}])
+
+    assert gold_calls[0].arguments["x"] == Decimal("0.1")
+    with pytest.raises(GoldFormatError):
+        parse_gold([{"name": "t", "arguments": {"x": float("nan")}}])
+    with pytest.raises(GoldFormatError):
+        parse_gold([{"name": "t", "arguments": {"x": float("inf")}}])
+    with pytest.raises(GoldFormatError):
+        score_case(
+            [block("t", {"x": 1})],
+            [{"name": "t", "arguments": {"x": float("nan")}}],
+        )
+
+
 def test_score_case_accepts_raw_gold_json():
     result = score_case(
         [block("t", {"x": 1})],

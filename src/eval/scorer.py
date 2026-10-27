@@ -19,10 +19,10 @@ Public surface:
     :class:`GoldFormatError` for a row that MATCH_SPEC §1.3 says to exclude
     before the split.
 
-``compare_values(predicted, gold, lenient=False)``
+``compare_values(predicted, gold, *, lenient=False)``
     Deep, JSON-type-strict value comparison (MATCH_SPEC §4).
 
-``score_case(predicted_blocks, gold, lenient=False)``
+``score_case(predicted_blocks, gold, *, lenient=False)``
     Score one final attempt. Returns ``(exact, partial, format_failure,
     name_only)`` as a :class:`ScoreResult` named tuple.
 """
@@ -66,9 +66,11 @@ class ScoreResult(NamedTuple):
     """One attempt's per-case result.
 
     ``exact`` is the primary 0/1 result. ``partial`` is the secondary
-    Dice/F1-style score. ``format_failure`` is a diagnostic; schema-validation
-    failures after retries are added by the harness because the scorer never
-    reads schemas. ``name_only`` is the name-multiset diagnostic.
+    Dice/F1-style score. ``format_failure`` is a single diagnostic flag; the
+    harness derives the ``no_tool_use`` / ``malformed_block`` /
+    ``schema_validation_after_retries`` breakdown, because the scorer never
+    reads schemas and does not know the validator's verdict. ``name_only`` is
+    the name-multiset diagnostic.
     """
 
     exact: int
@@ -84,6 +86,39 @@ class ScoreResult(NamedTuple):
 
 def _reject_non_finite(value: str) -> None:
     raise ValueError(f"non-finite JSON number is not allowed: {value}")
+
+
+def _normalize_gold_value(value: Any, path: str) -> Any:
+    """Normalize a gold value as if it had come from strict JSON parsing.
+
+    Floats become ``Decimal(str(x))``, non-finite numbers are rejected, and
+    containers are rebuilt recursively. This closes the gap where a caller
+    passes an already-parsed list and bypasses ``parse_constant``.
+    """
+
+    if isinstance(value, bool) or value is None or isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise GoldFormatError(f"non-finite gold number at {path}")
+        return Decimal(str(value))
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise GoldFormatError(f"non-finite gold number at {path}")
+        return value
+    if isinstance(value, list):
+        return [
+            _normalize_gold_value(item, f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _normalize_gold_value(item, f"{path}.{key}")
+            for key, item in value.items()
+        }
+    raise GoldFormatError(f"non-JSON value at {path}: {type(value).__name__}")
 
 
 def parse_gold(raw: str | list[Any] | tuple[Any, ...]) -> tuple[GoldCall, ...]:
@@ -131,7 +166,14 @@ def parse_gold(raw: str | list[Any] | tuple[Any, ...]) -> tuple[GoldCall, ...]:
                 f"gold element {index} arguments are not an object "
                 "(string-encoded arguments are excluded)"
             )
-        calls.append(GoldCall(name=name, arguments=arguments))
+        calls.append(
+            GoldCall(
+                name=name,
+                arguments=_normalize_gold_value(
+                    arguments, f"gold element {index} arguments"
+                ),
+            )
+        )
     return tuple(calls)
 
 
@@ -140,7 +182,26 @@ def _normalize_gold(gold: Any) -> tuple[GoldCall, ...]:
         return parse_gold(gold)
     if isinstance(gold, (list, tuple)):
         if len(gold) > 0 and all(isinstance(call, GoldCall) for call in gold):
-            return tuple(gold)
+            calls: list[GoldCall] = []
+            for index, call in enumerate(gold):
+                if not isinstance(call.name, str) or call.name == "":
+                    raise GoldFormatError(
+                        f"gold element {index} has a missing, non-string, "
+                        "or empty name"
+                    )
+                if not isinstance(call.arguments, dict):
+                    raise GoldFormatError(
+                        f"gold element {index} arguments are not an object"
+                    )
+                calls.append(
+                    GoldCall(
+                        name=call.name,
+                        arguments=_normalize_gold_value(
+                            call.arguments, f"gold element {index} arguments"
+                        ),
+                    )
+                )
+            return tuple(calls)
         return parse_gold(list(gold))
     raise TypeError("gold must be answers JSON, a list of calls, or GoldCall objects")
 
@@ -276,7 +337,7 @@ def _call_score(
     *,
     lenient: bool,
 ) -> float:
-    if predicted.malformed or predicted.name is None or predicted.arguments is None:
+    if predicted.malformed:
         return 0.0
     if predicted.name != gold.name:  # tool names are always strict
         return 0.0
@@ -353,11 +414,6 @@ def score_case(
 
     gold_calls = _normalize_gold(gold)
     predicted, format_failure = _extract_predicted(predicted_blocks)
-
-    # A malformed block already sets format_failure. Empty predictions are
-    # also format failures, since no well-formed tool_use block was present.
-    if not predicted:
-        format_failure = True
 
     sum_s = _optimal_sum(predicted, gold_calls, lenient=lenient)
 

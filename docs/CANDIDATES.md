@@ -62,12 +62,17 @@ reported below. It never triggers replacement.
 | Multi-tool rows with no candidate tool | 19,157 |
 | Rows removed by required-arguments filter | 1,316 |
 | Rows with empty arguments where required parameters exist | 11 |
-| **Eligible tools after filters (≥100 single-tool cases)** | **71** |
+| **Eligible tools, structural pool (≥100 single-tool cases)** | **71** |
+| Eligible tools after **all** filters, including required arguments | 63 |
 
-If the required-arguments filter were also used to define the tool pool
-(before single-tool counting), the pool would be 63 tools. The frozen pool is
-the 71-tool structural pool locked in Phase 0; the 12 candidates clear the
-100-case floor under either definition.
+The frozen order is generated from the **71-tool structural pool** locked in
+Phase 0. The required-arguments filter is applied per case; the verifier
+recomputes both pools and asserts that the 12 candidate counts are **identical
+under both** (all clear 100). The order is not re-rolled from the 63-tool
+all-filter pool, because the candidate list was frozen before the
+required-arguments filter was finalized and the instruction is explicitly not
+to re-roll candidates. If a candidate had lost cases to this filter, it would
+be flagged and a spare would cover it; none did.
 
 ## Frozen candidates (ordered)
 
@@ -104,14 +109,19 @@ python scripts/select_candidates.py \
   --revision 26d14ebfe18b1f7b524bd39b404b50af5dc97866
 ```
 
-The script loads the pinned revision, applies filters 1–4, computes the
-eligible pool, regenerates
-`random.Random(42).sample(sorted(eligible_tools), 12)`, and asserts:
+The script loads the pinned revision, applies filters 1–4, computes both the
+structural 71-tool pool and the 63-tool all-filter pool, regenerates
+`random.Random(42).sample(sorted(structural_eligible_tools), 12)`, and
+asserts:
 
 - the regenerated order equals the frozen order above;
 - its sha256 equals the value above;
-- every candidate clears the 100-case floor;
-- the required-arguments filter removes no candidate single-tool rows.
+- the pinned revision has 168,870 flat declarations, zero nested declarations,
+  and zero `required` keys in its 362,482 parameter descriptors;
+- the structural pool is 71 and the all-filter pool is 63;
+- the 12 candidate counts are identical under both pools, every candidate
+  clears the 100-case floor, and the required-arguments filter removes no
+  candidate single-tool rows.
 
 It prints aggregates and tool names only. It never prints or writes a raw
 dataset row, query, answer, or full tool schema.

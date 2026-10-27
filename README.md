@@ -43,8 +43,8 @@ agent-eval-harness/
 ├── tests/            # pytest: scorer pair tests + harness smoke tests
 ├── scripts/
 │   └── select_candidates.py # reproducible Phase-0 candidate verifier
+├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
-│   ├── PROJECT_PLAN.md     # phase-by-phase build sequence
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
