@@ -28,6 +28,9 @@ from select_candidates import FROZEN_CANDIDATES, PINNED_REVISION, analyze
 
 THRESHOLDS = (2, 5, 10, 20, 50, 100)
 PLACEHOLDER_M = 59
+EXPECTED_PLACEHOLDER_M = 59
+EXPECTED_EXACTLY_ONE = 340
+EXPECTED_TOTAL_DEV_TOOLS = 2_848
 
 
 def pessimistic_u(m: int) -> float:
@@ -37,13 +40,18 @@ def pessimistic_u(m: int) -> float:
     return math.sqrt((m - 1) / chi2.ppf(0.20, m - 1))
 
 
+def _u_or_none(m: int) -> float | None:
+    """u needs at least two tools; a smaller pool cannot estimate variance."""
+    return pessimistic_u(m) if m >= 2 else None
+
+
 @dataclass(frozen=True)
 class SensitivityRow:
     threshold: int
     structural_m: int
-    structural_u: float
+    structural_u: float | None
     filtered_m: int
-    filtered_u: float
+    filtered_u: float | None
 
 
 @dataclass(frozen=True)
@@ -78,9 +86,9 @@ def build_sensitivity(report) -> Sensitivity:
             SensitivityRow(
                 threshold=threshold,
                 structural_m=structural_m,
-                structural_u=pessimistic_u(structural_m),
+                structural_u=_u_or_none(structural_m),
                 filtered_m=filtered_m,
-                filtered_u=pessimistic_u(filtered_m),
+                filtered_u=_u_or_none(filtered_m),
             )
         )
 
@@ -92,6 +100,10 @@ def build_sensitivity(report) -> Sensitivity:
         filtered_total=len(filtered),
         placeholder_u=pessimistic_u(PLACEHOLDER_M),
     )
+
+
+def _format_u(value: float | None) -> str:
+    return f"{value:.3f}" if value is not None else "—"
 
 
 def render_table(sensitivity: Sensitivity) -> str:
@@ -107,12 +119,12 @@ def render_table(sensitivity: Sensitivity) -> str:
     for row in sensitivity.rows:
         structural = (
             f"**{row.structural_m:,} (placeholder)**"
-            if row.threshold == 100 and row.structural_m == PLACEHOLDER_M
+            if row.threshold == 100
             else f"{row.structural_m:,}"
         )
         lines.append(
-            f"| ≥{row.threshold} | {structural} | {row.structural_u:.3f} "
-            f"| {row.filtered_m:,} | {row.filtered_u:.3f} |"
+            f"| ≥{row.threshold} | {structural} | {_format_u(row.structural_u)} "
+            f"| {row.filtered_m:,} | {_format_u(row.filtered_u)} |"
         )
     lines.append("")
     lines.append(
@@ -149,9 +161,35 @@ def main() -> int:
     report = analyze(dataset)
     sensitivity = build_sensitivity(report)
 
+    failures = []
+    if args.revision != PINNED_REVISION:
+        failures.append(f"revision {args.revision} != pinned {PINNED_REVISION}")
+    last_row = sensitivity.rows[-1]
+    if last_row.structural_m != EXPECTED_PLACEHOLDER_M:
+        failures.append(
+            f"placeholder threshold m {last_row.structural_m} "
+            f"!= {EXPECTED_PLACEHOLDER_M}"
+        )
+    if sensitivity.structural_exactly_one != EXPECTED_EXACTLY_ONE:
+        failures.append(
+            "exactly-one dev tools "
+            f"{sensitivity.structural_exactly_one} != {EXPECTED_EXACTLY_ONE}"
+        )
+    if sensitivity.structural_total != EXPECTED_TOTAL_DEV_TOOLS:
+        failures.append(
+            "dev tools "
+            f"{sensitivity.structural_total} != {EXPECTED_TOTAL_DEV_TOOLS}"
+        )
+    if failures:
+        print("SENSITIVITY: FAIL")
+        for failure in failures:
+            print(f"  - {failure}")
+        return 1
+
     print(f"revision: {args.revision}")
     print(render_table(sensitivity))
     print(f"placeholder u at m = {PLACEHOLDER_M}: {sensitivity.placeholder_u:.3f}")
+    print("SENSITIVITY: OK")
     return 0
 
 

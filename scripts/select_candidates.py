@@ -154,7 +154,11 @@ def analyze(dataset) -> Report:
         report.rows += 1
         answers = json.loads(row["answers"])
         tools_list = json.loads(row["tools"])
-        tools = {tool["name"]: tool for tool in tools_list}
+        tools = {
+            tool["name"]: tool
+            for tool in tools_list
+            if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+        }
         report.distinct_tools.update(tools)
 
         for tool in tools_list:
@@ -212,7 +216,7 @@ def analyze(dataset) -> Report:
         any_empty_where_required = False
         for answer in answers:
             spec = normalize_parameters(tools[answer["name"]])
-            arguments = answer.get("arguments") or {}
+            arguments = answer["arguments"]
             if spec.required - set(arguments):
                 any_required_gap = True
             if not arguments and spec.required:
@@ -362,6 +366,10 @@ def main() -> int:
     if len(eligible_structural) != 71:
         failures.append(
             f"structural eligible pool {len(eligible_structural)} != 71"
+        )
+    if len(eligible_after_all) != 63:
+        failures.append(
+            f"all-filter eligible pool {len(eligible_after_all)} != 63"
         )
     if report.parameter_forms.get("flat") != 168_870:
         failures.append(

@@ -7,9 +7,9 @@ dataset card describes a required flag. This script measures what that
 assumption removes and exposes the evidence needed for the owner's final rule.
 
 It is offline: it reads the pinned dataset only. It makes no model call, runs
-no candidate tool, and writes no raw query, gold answer, row id, or full tool
-schema. It emits aggregate counts, tool/parameter names, parameter
-descriptions, and yes/no flags.
+no candidate tool, and writes no raw query, gold answer, or full tool schema.
+It emits aggregate counts, tool/parameter names, parameter descriptions, and
+yes/no flags.
 
 Run::
 
@@ -157,23 +157,25 @@ class AuditReport:
         return {parameter for _, parameter in self.parameter_instances}
 
 
-def _tool_description(tool: dict, parameter: str) -> str:
+def _descriptor(tool: dict, parameter: str) -> dict | None:
     parameters = tool.get("parameters")
     if not isinstance(parameters, dict):
-        return ""
+        return None
     descriptor = parameters.get(parameter)
-    if not isinstance(descriptor, dict):
+    return descriptor if isinstance(descriptor, dict) else None
+
+
+def _tool_description(tool: dict, parameter: str) -> str:
+    descriptor = _descriptor(tool, parameter)
+    if descriptor is None:
         return ""
     description = descriptor.get("description")
     return description if isinstance(description, str) else ""
 
 
 def _has_literal_default(tool: dict, parameter: str) -> bool:
-    parameters = tool.get("parameters")
-    if not isinstance(parameters, dict):
-        return False
-    descriptor = parameters.get(parameter)
-    return isinstance(descriptor, dict) and "default" in descriptor
+    descriptor = _descriptor(tool, parameter)
+    return descriptor is not None and "default" in descriptor
 
 
 def analyze_required_filter(dataset) -> AuditReport:
@@ -334,8 +336,8 @@ def render_markdown(
     add("- Offline: no model calls, no candidate-tool runs.")
     add(f"- Sample seed: **{seed}**; sample size: **{sample_total} excluded rows**.")
     add("- Contents: aggregate counts, tool names, parameter names, parameter")
-    add("  descriptions, and yes/no flags only. No raw query, gold answer,")
-    add("  row id, or full tool schema.")
+    add("  descriptions, and yes/no flags only. No raw query, gold answer, or")
+    add("  full tool schema.")
     add("")
 
     add("## Reproduction")
@@ -400,7 +402,7 @@ def render_markdown(
         f"| {_fmt(report.rows_with_other_arguments)} |"
     )
     add(
-        "| Rows where every missing call has empty arguments "
+        "| Rows with at least one missing call that has empty arguments "
         f"| {_fmt(report.rows_with_empty_arguments)} |"
     )
     add(
@@ -464,16 +466,16 @@ def render_markdown(
     add("")
     add(
         f"Sampling: `random.Random({seed}).sample(sorted(excluded_row_indices), "
-        f"{sample_total})`; the sample order is the `random.sample` order. "
-        "Dataset rows are 0-based indices. A sampled row can contribute more "
-        "than one line when multiple gold calls omit parameters."
+        f"{sample_total})`; the sample order is the `random.sample` order. A "
+        "sampled row can contribute more than one line when multiple gold "
+        "calls omit parameters. The table reports sample positions only."
     )
     add("")
     add(
-        "| # | Dataset row | Tool | Missing parameter | Category "
+        "| # | Tool | Missing parameter | Category "
         "| Other gold args in that call? | Parameter description |"
     )
-    add("|---:|---:|---|---|---|---|---|")
+    add("|---:|---|---|---|---|---|")
     if report.records:
         indices = sorted(report.records)
         chosen = sample_indices(indices, seed=seed, size=sample_total)
@@ -481,12 +483,12 @@ def render_markdown(
             for item in report.records[index]:
                 other = "yes" if item.has_other_arguments else "no"
                 add(
-                    f"| {position} | {index} | `{item.tool}` "
+                    f"| {position} | `{item.tool}` "
                     f"| `{item.parameter}` | {item.category} | {other} "
                     f"| {_md(item.description)} |"
                 )
     else:
-        add("| — | — | — | — | — | — | No excluded rows |")
+        add("| — | — | — | — | — | No excluded rows |")
     add("")
 
     core_records = sorted(
@@ -509,14 +511,14 @@ def render_markdown(
         )
         add("")
         add(
-            "| Dataset row | Tool | Missing parameter "
+            "| # | Tool | Missing parameter "
             "| Other gold args in that call? | Parameter description |"
         )
         add("|---:|---|---|---|---|")
-        for item in core_records:
+        for position, item in enumerate(core_records, start=1):
             other = "yes" if item.has_other_arguments else "no"
             add(
-                f"| {item.dataset_index} | `{item.tool}` "
+                f"| {position} | `{item.tool}` "
                 f"| `{item.parameter}` | {other} | {_md(item.description)} |"
             )
         add("")
@@ -524,6 +526,8 @@ def render_markdown(
     structural_pool = len(report.eligible_structural())
     interim_pool = len(report.eligible_interim())
     refined_pool = len(report.eligible_refined())
+    interim_gaps = sum(report.candidate_interim_gaps.values())
+    refined_gaps = sum(report.candidate_refined_gaps.values())
     dropped = sorted(
         set(report.eligible_structural()) - set(report.eligible_refined())
     )
@@ -537,12 +541,11 @@ def render_markdown(
     add("|---|---:|---:|---:|")
     add(
         f"| Keep the interim heuristic | {_fmt(report.excluded_rows)} "
-        f"| {interim_pool} "
-        "| 0 |"
+        f"| {interim_pool} | {_fmt(interim_gaps)} |"
     )
     add(
         f"| Description-aware refinement | {_fmt(report.refined_excluded_rows)} "
-        f"| {refined_pool} | 0 |"
+        f"| {refined_pool} | {_fmt(refined_gaps)} |"
     )
     add(f"| Drop the filter | 0 | {structural_pool} | 0 |")
     add("")
@@ -570,9 +573,11 @@ def render_markdown(
         "**If the filter is dropped**, the eligible pool returns to the "
         f"structural {structural_pool} tools. The {interim_pool}-tool figure "
         "is an artifact of the interim heuristic, not a property of the "
-        "dataset. **No option removes a candidate single-tool row**: all 12 "
-        "candidate counts, the frozen order, and its sha256 are unchanged, so "
-        "no candidate replacement is triggered."
+        "dataset. **No option removes a candidate single-tool row** "
+        f"(interim gaps: {_fmt(interim_gaps)}; description-aware gaps: "
+        f"{_fmt(refined_gaps)}): all {len(FROZEN_CANDIDATES)} candidate "
+        "counts, the frozen order, and its sha256 are unchanged, so no "
+        "candidate replacement is triggered."
     )
     add("")
     add(
@@ -583,7 +588,7 @@ def render_markdown(
     )
     add("")
 
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -623,45 +628,45 @@ def main() -> int:
     failures = []
     if args.revision != PINNED_REVISION:
         failures.append(f"revision {args.revision} != pinned {PINNED_REVISION}")
-    if report.excluded_rows != EXPECTED_EXCLUDED_ROWS:
-        failures.append(
-            f"excluded rows {report.excluded_rows} != {EXPECTED_EXCLUDED_ROWS}"
-        )
-    if report.missing_instances != EXPECTED_MISSING_INSTANCES:
-        failures.append(
-            "missing-parameter instances "
-            f"{report.missing_instances} != {EXPECTED_MISSING_INSTANCES}"
-        )
-    if report.malformed_gold_rows != 0:
-        failures.append(
-            f"malformed gold rows {report.malformed_gold_rows} != 0"
-        )
-    if report.refined_excluded_rows != EXPECTED_REFINED_ROWS:
-        failures.append(
-            "core-input excluded rows "
-            f"{report.refined_excluded_rows} != {EXPECTED_REFINED_ROWS}"
-        )
-    if report.category_instances[CATEGORY_CORE] != EXPECTED_CORE_INSTANCES:
-        failures.append(
-            "core-input instances "
-            f"{report.category_instances[CATEGORY_CORE]} "
-            f"!= {EXPECTED_CORE_INSTANCES}"
-        )
-    if len(report.eligible_structural()) != EXPECTED_STRUCTURAL_POOL:
-        failures.append(
-            "structural pool "
-            f"{len(report.eligible_structural())} != {EXPECTED_STRUCTURAL_POOL}"
-        )
-    if len(report.eligible_interim()) != EXPECTED_INTERIM_POOL:
-        failures.append(
-            "interim pool "
-            f"{len(report.eligible_interim())} != {EXPECTED_INTERIM_POOL}"
-        )
-    if len(report.eligible_refined()) != EXPECTED_REFINED_POOL:
-        failures.append(
-            "refined pool "
-            f"{len(report.eligible_refined())} != {EXPECTED_REFINED_POOL}"
-        )
+
+    expectations = [
+        ("excluded rows", report.excluded_rows, EXPECTED_EXCLUDED_ROWS),
+        (
+            "missing-parameter instances",
+            report.missing_instances,
+            EXPECTED_MISSING_INSTANCES,
+        ),
+        ("malformed gold rows", report.malformed_gold_rows, 0),
+        (
+            "core-input excluded rows",
+            report.refined_excluded_rows,
+            EXPECTED_REFINED_ROWS,
+        ),
+        (
+            "core-input instances",
+            report.category_instances[CATEGORY_CORE],
+            EXPECTED_CORE_INSTANCES,
+        ),
+        (
+            "structural pool",
+            len(report.eligible_structural()),
+            EXPECTED_STRUCTURAL_POOL,
+        ),
+        (
+            "interim pool",
+            len(report.eligible_interim()),
+            EXPECTED_INTERIM_POOL,
+        ),
+        (
+            "refined pool",
+            len(report.eligible_refined()),
+            EXPECTED_REFINED_POOL,
+        ),
+    ]
+    for label, actual, expected in expectations:
+        if actual != expected:
+            failures.append(f"{label} {actual} != {expected}")
+
     if report.candidate_interim_gaps:
         failures.append(
             "interim filter removes candidate rows: "

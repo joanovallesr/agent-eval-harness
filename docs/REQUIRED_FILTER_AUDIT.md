@@ -11,8 +11,8 @@ pre-registration.
 - Offline: no model calls, no candidate-tool runs.
 - Sample seed: **42**; sample size: **50 excluded rows**.
 - Contents: aggregate counts, tool names, parameter names, parameter
-  descriptions, and yes/no flags only. No raw query, gold answer,
-  row id, or full tool schema.
+  descriptions, and yes/no flags only. No raw query, gold answer, or
+  full tool schema.
 
 ## Reproduction
 
@@ -42,7 +42,7 @@ asserts the pinned counts below.
 | Rows with more than one missing-parameter instance | 105 |
 | Rows with more than one distinct missing parameter name | 38 |
 | Rows where at least one missing call carries other gold arguments | 1,305 |
-| Rows where every missing call has empty arguments | 11 |
+| Rows with at least one missing call that has empty arguments | 11 |
 | Distinct missing parameter names | 29 |
 | Single-tool candidate rows removed | 0 |
 
@@ -96,115 +96,115 @@ Categories are lexical and mutually exclusive, with fixed precedence: (1) filter
 
 ## Reproducible sample of 50 excluded rows (seed 42)
 
-Sampling: `random.Random(42).sample(sorted(excluded_row_indices), 50)`; the sample order is the `random.sample` order. Dataset rows are 0-based indices. A sampled row can contribute more than one line when multiple gold calls omit parameters.
+Sampling: `random.Random(42).sample(sorted(excluded_row_indices), 50)`; the sample order is the `random.sample` order. A sampled row can contribute more than one line when multiple gold calls omit parameters. The table reports sample positions only.
 
-| # | Dataset row | Tool | Missing parameter | Category | Other gold args in that call? | Parameter description |
-|---:|---:|---|---|---|---|---|
-| 1 | 59488 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
-| 2 | 12624 | `compound_interest` | `n` | optional-by-description | yes | The number of times interest is compounded per year. Defaults to 1. |
-| 3 | 3244 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 3 | 3244 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 4 | 32265 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 5 | 28555 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 6 | 25884 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 7 | 15808 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
-| 8 | 11365 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 9 | 51667 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 10 | 9766 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 11 | 55170 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
-| 12 | 43457 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 13 | 4288 | `mean_confidence_interval` | `confidence` | optional-by-description | yes | The desired confidence level. Default is 0.95. |
-| 14 | 3997 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
-| 15 | 10465 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 16 | 25279 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 17 | 27062 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 18 | 49677 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 19 | 55922 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 20 | 3332 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 21 | 52919 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 22 | 23351 | `dice_roll_probability` | `num_faces` | optional-by-description | yes | The number of faces on each die. Defaults to 6. |
-| 23 | 43327 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 24 | 25437 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 25 | 45387 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 26 | 55154 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 27 | 32469 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 28 | 711 | `bacterial_growth` | `doubling_time` | optional-by-description | yes | The doubling time of the bacteria in minutes. Defaults to 20. |
-| 29 | 18773 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 30 | 43489 | `probability_of_consecutive_rolls` | `num_sides` | optional-by-description | yes | The number of sides on the die. Defaults to 6. |
-| 31 | 37527 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
-| 32 | 18008 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 33 | 24956 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 34 | 37366 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 35 | 10345 | `mean_confidence_interval` | `confidence` | optional-by-description | yes | The desired confidence level. Default is 0.95. |
-| 36 | 40374 | `bacterial_growth` | `doubling_time` | optional-by-description | yes | The doubling time of the bacteria in minutes. Defaults to 20. |
-| 37 | 10843 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 37 | 10843 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 38 | 38954 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
-| 39 | 37769 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
-| 40 | 56032 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 40 | 56032 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 41 | 31263 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 42 | 5321 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 43 | 46089 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
-| 44 | 50978 | `predict_forest_area` | `include_humans` | optional-by-description | yes | Whether to include the impact of human activities in the prediction. Defaults to False. |
-| 45 | 14386 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 46 | 40275 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 47 | 9014 | `predict_evolution_rate` | `model` | optional-by-description | yes | The model used to make the prediction, options: 'Darwin', 'Lamarck', default is 'Darwin'. |
-| 47 | 9014 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
-| 48 | 52112 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
-| 49 | 34134 | `dice_roll_probability` | `num_faces` | optional-by-description | yes | The number of faces on each die. Defaults to 6. |
-| 49 | 34134 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
-| 50 | 58121 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| # | Tool | Missing parameter | Category | Other gold args in that call? | Parameter description |
+|---:|---|---|---|---|---|
+| 1 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
+| 2 | `compound_interest` | `n` | optional-by-description | yes | The number of times interest is compounded per year. Defaults to 1. |
+| 3 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 3 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 4 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 5 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 6 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 7 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
+| 8 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 9 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 10 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 11 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
+| 12 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 13 | `mean_confidence_interval` | `confidence` | optional-by-description | yes | The desired confidence level. Default is 0.95. |
+| 14 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
+| 15 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 16 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 17 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 18 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 19 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 20 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 21 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 22 | `dice_roll_probability` | `num_faces` | optional-by-description | yes | The number of faces on each die. Defaults to 6. |
+| 23 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 24 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 25 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 26 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 27 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 28 | `bacterial_growth` | `doubling_time` | optional-by-description | yes | The doubling time of the bacteria in minutes. Defaults to 20. |
+| 29 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 30 | `probability_of_consecutive_rolls` | `num_sides` | optional-by-description | yes | The number of sides on the die. Defaults to 6. |
+| 31 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
+| 32 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 33 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 34 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 35 | `mean_confidence_interval` | `confidence` | optional-by-description | yes | The desired confidence level. Default is 0.95. |
+| 36 | `bacterial_growth` | `doubling_time` | optional-by-description | yes | The doubling time of the bacteria in minutes. Defaults to 20. |
+| 37 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 37 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 38 | `sort_numbers` | `descending` | filter/pagination/sort | yes | If True, sorts the numbers in descending order. Defaults to False. |
+| 39 | `cell_density` | `factor` | optional-by-description | yes | The calibration factor for converting OD to cell density. Defaults to 1e9. |
+| 40 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 40 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 41 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 42 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 43 | `independent_samples_t_test` | `alpha` | optional-by-description | yes | The significance level of the test. Defaults to 0.05. |
+| 44 | `predict_forest_area` | `include_humans` | optional-by-description | yes | Whether to include the impact of human activities in the prediction. Defaults to False. |
+| 45 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 46 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 47 | `predict_evolution_rate` | `model` | optional-by-description | yes | The model used to make the prediction, options: 'Darwin', 'Lamarck', default is 'Darwin'. |
+| 47 | `project_investment_growth` | `inflation_adjusted` | optional-by-description | yes | Whether to adjust the final value for inflation. Defaults to True. |
+| 48 | `calculate_electric_field` | `permitivity` | optional-by-description | yes | Permitivity of the space where field is being calculated, default is 8.854e-12. |
+| 49 | `dice_roll_probability` | `num_faces` | optional-by-description | yes | The number of faces on each die. Defaults to 6. |
+| 49 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
+| 50 | `batting_average` | `precision` | optional-by-description | yes | The number of decimal places to round the batting average. Defaults to 3. |
 
 ## Supplementary: every core-input exclusion
 
 These are the only missing parameters without a documented default/optional fallback or a filter/sort name. They are listed in full, not sampled, because they drive the description-aware option below.
 
-| Dataset row | Tool | Missing parameter | Other gold args in that call? | Parameter description |
+| # | Tool | Missing parameter | Other gold args in that call? | Parameter description |
 |---:|---|---|---|---|
-| 33933 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 36576 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
-| 36755 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 36755 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 36755 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 37281 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 38000 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 38712 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 40276 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 41776 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 42486 | `expand_around_center` | `s` | yes | The input string. |
-| 43583 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 43927 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 44293 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 45299 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 45408 | `expand_around_center` | `s` | yes | The input string. |
-| 45906 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 45996 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 46982 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 47444 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 47528 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 49966 | `integrate` | `end_x` | no | The ending x-value to integrate over. |
-| 49966 | `integrate` | `method` | no | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 50919 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 51726 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
-| 53485 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 53514 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 53583 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 54176 | `binary_search` | `arr` | yes | The sorted list of integers. |
-| 54278 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 54909 | `sort_numbers` | `numbers` | no | The list of numbers to be sorted. |
-| 55164 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 55818 | `find_missing_ranges` | `nums` | yes | The sorted list of integers. |
-| 57018 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 57077 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
-| 57291 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 57291 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 57291 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
-| 57679 | `binary_search` | `arr` | yes | The sorted list of integers. |
-| 57812 | `sort_numbers` | `numbers` | no | The list of numbers to be sorted. |
-| 58463 | `split_list` | `lst` | yes | The input list. |
-| 58693 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
-| 59686 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
+| 1 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 2 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
+| 3 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 4 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 5 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 6 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 7 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 8 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 9 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 10 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 11 | `expand_around_center` | `s` | yes | The input string. |
+| 12 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 13 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 14 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 15 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 16 | `expand_around_center` | `s` | yes | The input string. |
+| 17 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 18 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 19 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 20 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 21 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 22 | `integrate` | `end_x` | no | The ending x-value to integrate over. |
+| 23 | `integrate` | `method` | no | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 24 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 25 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
+| 26 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 27 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 28 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 29 | `binary_search` | `arr` | yes | The sorted list of integers. |
+| 30 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 31 | `sort_numbers` | `numbers` | no | The list of numbers to be sorted. |
+| 32 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 33 | `find_missing_ranges` | `nums` | yes | The sorted list of integers. |
+| 34 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 35 | `numerical_derivative` | `function` | yes | The function to calculate the derivative of. |
+| 36 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 37 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 38 | `compound_interest` | `time` | no | The time in years for which the investment is held. |
+| 39 | `binary_search` | `arr` | yes | The sorted list of integers. |
+| 40 | `sort_numbers` | `numbers` | no | The list of numbers to be sorted. |
+| 41 | `split_list` | `lst` | yes | The input list. |
+| 42 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
+| 43 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
 
 ## What the audit supports (owner decision pending)
 
@@ -220,7 +220,6 @@ The description-aware refinement treats a parameter as optional when its descrip
 
 **Supported rule, if the owner accepts description text as the signal:** the description-aware refinement. The audit finds that 97.0% of missing-parameter instances are parameters whose own description documents a default/optional fallback, while only 43 instances (38 rows) are core inputs with no such language. This is a recommendation from the counts, **not a decision**: the owner signs the final rule before pre-registration.
 
-**If the filter is dropped**, the eligible pool returns to the structural 71 tools. The 63-tool figure is an artifact of the interim heuristic, not a property of the dataset. **No option removes a candidate single-tool row**: all 12 candidate counts, the frozen order, and its sha256 are unchanged, so no candidate replacement is triggered.
+**If the filter is dropped**, the eligible pool returns to the structural 71 tools. The 63-tool figure is an artifact of the interim heuristic, not a property of the dataset. **No option removes a candidate single-tool row** (interim gaps: 0; description-aware gaps: 0): all 12 candidate counts, the frozen order, and its sha256 are unchanged, so no candidate replacement is triggered.
 
 The public card describes a `required` boolean; the pinned revision has zero `required` keys in its 362,482 parameter descriptors. That card-vs-data discrepancy remains open and must be recorded in pre-registration whichever rule is chosen.
-

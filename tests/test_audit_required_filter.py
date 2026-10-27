@@ -20,6 +20,7 @@ from audit_required_filter import (
     render_markdown,
     sample_indices,
 )
+from select_candidates import analyze
 
 
 def param(description: str) -> dict:
@@ -157,6 +158,90 @@ def test_distinct_missing_parameters_are_counted_per_row() -> None:
     assert report.missing_instances == 2
     assert report.rows_by_distinct_missing[2] == 1
     assert report.rows_by_instance_count[2] == 1
+
+
+def test_optional_description_without_literal_default_is_interim_only() -> None:
+    rows = [
+        # Description says default, descriptor has no `default` key.
+        row(
+            [tool("stat", {"alpha": param("Defaults to 0.05.")})],
+            [{"name": "stat", "arguments": {}}],
+        ),
+        # A literal `default` key already makes the parameter optional.
+        row(
+            [
+                tool(
+                    "literal",
+                    {
+                        "x": {
+                            "type": "string",
+                            "description": "Optional value.",
+                            "default": "a",
+                        }
+                    },
+                )
+            ],
+            [{"name": "literal", "arguments": {}}],
+        ),
+    ]
+
+    report = analyze_required_filter(rows)
+
+    assert report.excluded_rows == 1
+    assert report.category_instances[CATEGORY_OPTIONAL] == 1
+    assert report.optional_language_instances == 1
+    assert report.literal_default_instances == 0
+
+
+def test_audit_and_phase0_verifier_agree_on_shared_rows() -> None:
+    rows = [
+        row(
+            [
+                tool(
+                    "sort_numbers",
+                    {
+                        "numbers": param("The list of numbers."),
+                        "descending": param("Defaults to False."),
+                    },
+                )
+            ],
+            [{"name": "sort_numbers", "arguments": {"numbers": [1, 2]}}],
+        ),
+        row(
+            [tool("differentiate", {"function": param("The function.")})],
+            [{"name": "differentiate", "arguments": {}}],
+        ),
+        row(
+            [tool("add", {"a": param("First addend.")})],
+            [{"name": "add", "arguments": {"a": 1}}],
+        ),
+        row(
+            [tool("add", {"a": param("First addend.")})],
+            [{"name": "add", "arguments": '{"a": 1}'}],
+        ),
+        row([tool("add", {"a": param("First addend.")})], [{"arguments": {}}]),
+        row([tool("add", {"a": param("First addend.")})], []),
+        row(
+            [tool("add", {"a": param("First addend.")})],
+            [{"name": "ghost", "arguments": {}}],
+        ),
+    ]
+
+    audit = analyze_required_filter(rows)
+    phase0 = analyze(rows)
+
+    assert audit.rows == phase0.rows
+    assert audit.empty_answer_rows == phase0.empty_answer_rows
+    assert audit.malformed_name_rows == phase0.malformed_name_rows
+    assert audit.malformed_argument_rows == phase0.malformed_argument_rows
+    assert audit.malformed_gold_rows == phase0.malformed_gold_rows
+    assert audit.unknown_name_rows == phase0.unknown_name_rows
+    assert audit.excluded_rows == phase0.required_argument_rows
+    assert audit.single_tool_counts == phase0.single_tool_counts
+    assert (
+        audit.interim_filtered_single_tool_counts
+        == phase0.required_filtered_single_tool_counts
+    )
 
 
 def test_sample_is_reproducible_and_seeded() -> None:
