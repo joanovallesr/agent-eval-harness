@@ -2,7 +2,7 @@
 
 NON-NEGOTIABLE: the judge model must be from a DIFFERENT model family than the
 agent's model. A model grading its own family's traces is a conflict of
-interest — see docs/EVAL_DESIGN.md section 4.
+interest — see docs/EVAL_DESIGN.md §9.
 
 Labels: correct / wrong / partial. The judge sees the task, the expected
 answer, and the agent's trace (tool calls + final answer).
@@ -25,4 +25,6 @@ JUDGE_PROMPT_VERSION = "v0-unimplemented"
 
 def judge_trace(task: dict, trace) -> tuple[Verdict, str]:
     """Score one trace. Returns (verdict, one-line rationale)."""
-    raise NotImplementedError("Phase 3: implement the judge (different model family!)")
+    raise NotImplementedError(
+        "Phase 5: implement the judge (different model family!)"
+    )

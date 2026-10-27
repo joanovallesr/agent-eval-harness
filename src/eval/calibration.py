@@ -23,9 +23,11 @@ KAPPA_SHIP_THRESHOLD = 0.70
 
 def cohens_kappa(y_human: list[str], y_judge: list[str]) -> float:
     """Cohen's kappa for the three labels correct/wrong/partial."""
-    raise NotImplementedError("Phase 3: implement kappa (no sklearn dependency needed)")
+    raise NotImplementedError(
+        "Phase 5: implement kappa (no sklearn dependency needed)"
+    )
 
 
 def confusion_matrix(y_human: list[str], y_judge: list[str]) -> dict:
     """3x3 confusion matrix, human rows x judge cols."""
-    raise NotImplementedError("Phase 3: implement the confusion matrix")
+    raise NotImplementedError("Phase 5: implement the confusion matrix")

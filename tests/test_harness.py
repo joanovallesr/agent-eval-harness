@@ -6,11 +6,6 @@ goes behind a marker and runs manually.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
 import pytest
 
 
@@ -28,7 +23,7 @@ def test_kappa_threshold_constant():
     assert KAPPA_SHIP_THRESHOLD == 0.70
 
 
-@pytest.mark.skip(reason="Phase 3: implement cohens_kappa first")
+@pytest.mark.skip(reason="Phase 5: implement cohens_kappa first")
 def test_cohens_kappa_perfect_agreement():
     from eval.calibration import cohens_kappa
 

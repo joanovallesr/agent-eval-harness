@@ -3,10 +3,10 @@
 Each tool is a dict with "name", "description", "input_schema" (Anthropic
 tool-use format), and "handler" — the Python function that actually runs it.
 
-TODO(phase-1): start with 3-5 tools that mirror the xLAM-60k dev categories
+TODO(phase-2): start with 3-5 tools that mirror the xLAM-60k dev tools
 (e.g. calculator, search stub, date/time, a mock API). Real tools keep the
 benchmark honest; stubbed tools make the agent untestable.
-TODO(phase-1): every handler returns {"ok": bool, "result": ..., "error": ...}
+TODO(phase-2): every handler returns {"ok": bool, "result": ..., "error": ...}
 so the agent loop has a uniform contract.
 """
 
@@ -16,11 +16,11 @@ from typing import Any
 
 
 def _placeholder_handler(**kwargs: Any) -> dict[str, Any]:
-    raise NotImplementedError("Phase 1: implement real tool handlers")
+    raise NotImplementedError("Phase 2: implement real tool handlers")
 
 
 TOOLS: list[dict[str, Any]] = [
-    # TODO(phase-1): fill in. Example shape:
+    # TODO(phase-2): fill in. Example shape:
     # {
     #     "name": "get_weather",
     #     "description": "Current weather for a city.",

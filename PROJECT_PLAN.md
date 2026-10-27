@@ -123,11 +123,11 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [ ] Measurable: RESULTS.md committed; resume updated.
 
 ## Phase 7 — CI gate
-- [ ] The scaffold's `.github/workflows/ci.yml` already runs lint + pytest on
-      every push/PR (pair tests are required from Phase 1). This phase adds
-      only the LLM gate: rework the scaffold's `eval-gate` job to
+- [x] `.github/workflows/ci.yml` runs Ruff + pytest on every push/PR (offline
+      checks; pair tests are required from Phase 1).
+- [ ] This phase adds only the LLM gate: add an `eval-gate` job that is
       **advisory-first** (non-blocking) until the false-alarm rate is
-      measured, then promote to required.
+      measured, then promote it to required.
 - [ ] LLM gate: 50-case dev subset, Haiku arms, tolerance band from repeated
       unchanged-code runs, rerun-once on failure, everything pinned,
       reference score in repo, **dedicated key with its own low spend limit**
