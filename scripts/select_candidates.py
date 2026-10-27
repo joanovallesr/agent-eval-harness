@@ -107,7 +107,10 @@ class Report:
     parameter_descriptor_keys: Counter = field(default_factory=Counter)
     required_key_descriptors: int = 0
     empty_answer_rows: int = 0
-    bad_name_rows: int = 0
+    malformed_name_rows: int = 0
+    unknown_name_rows: int = 0
+    malformed_argument_rows: int = 0
+    malformed_gold_rows: int = 0
     single_tool_rows: int = 0
     multi_tool_rows: int = 0
     mixed_candidate_non_candidate: int = 0
@@ -178,12 +181,31 @@ def analyze(dataset) -> Report:
             report.empty_answer_rows += 1
             continue
 
-        names = [answer.get("name") for answer in answers]
-        if any(
-            not isinstance(name, str) or name == "" or name not in tools
-            for name in names
-        ):
-            report.bad_name_rows += 1
+        # Owner decision 3 (final): malformed gold calls are excluded and
+        # counted before the split, never scored as 0. "Missing" applies to
+        # the tool name; arguments must be a JSON object (not a string).
+        malformed_name = any(
+            not isinstance(answer, dict)
+            or not isinstance(answer.get("name"), str)
+            or answer.get("name") == ""
+            for answer in answers
+        )
+        malformed_arguments = any(
+            not isinstance(answer, dict)
+            or not isinstance(answer.get("arguments"), dict)
+            for answer in answers
+        )
+        if malformed_name:
+            report.malformed_name_rows += 1
+        if malformed_arguments:
+            report.malformed_argument_rows += 1
+        if malformed_name or malformed_arguments:
+            report.malformed_gold_rows += 1
+            continue
+
+        names = [answer["name"] for answer in answers]
+        if any(name not in tools for name in names):
+            report.unknown_name_rows += 1
             continue
 
         any_required_gap = False
@@ -290,7 +312,10 @@ def main() -> int:
     print(f"parameter descriptor keys: {dict(report.parameter_descriptor_keys)}")
     print(f"descriptors with a required key: {report.required_key_descriptors}")
     print(f"empty answer rows: {report.empty_answer_rows}")
-    print(f"bad-name rows: {report.bad_name_rows}")
+    print(f"malformed gold rows: {report.malformed_gold_rows}")
+    print(f"  malformed tool names: {report.malformed_name_rows}")
+    print(f"  malformed arguments: {report.malformed_argument_rows}")
+    print(f"  names absent from tools: {report.unknown_name_rows}")
     print(f"single-tool rows: {report.single_tool_rows}")
     print(f"multi-tool rows: {report.multi_tool_rows}")
     print(
@@ -346,6 +371,10 @@ def main() -> int:
     if report.parameter_forms.get("nested", 0) != 0:
         failures.append(
             f"nested tool declarations {report.parameter_forms.get('nested')} != 0"
+        )
+    if report.malformed_gold_rows != 0:
+        failures.append(
+            f"malformed gold rows {report.malformed_gold_rows} != 0"
         )
     if report.required_key_descriptors != 0:
         failures.append(
