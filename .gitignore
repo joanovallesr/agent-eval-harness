@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local eval outputs (never commit results or materialized splits)
+results/
+state/
+data/*.jsonl
+data/*.json
+!data/README.md
+baselines/*.json
+!baselines/.gitkeep
+
+# Secrets
+.env
+.env.*
+
+# macOS
+*.DS_Store
