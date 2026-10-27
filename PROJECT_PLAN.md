@@ -4,32 +4,41 @@ Locked by the grill session of 2026-10-23. Work the phases in order; each
 phase ends with something merged and measurable. The full locked design lives
 in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 
-## Phase 0 — Data access + revision pin
+## Phase 0 — Data access + revision pin + held-out-tool freeze
 - [x] Access granted 2026-10-23 (click-through; gated: auto).
-- [ ] Download `xlam_function_calling_60k.json` and **pin the exact revision
-      hash** in `data/README.md` (reference: `26d14ebf...`, 2025-01-24 — pin
-      whatever you actually download).
+- [x] Pin the exact revision in `data/README.md`:
+      `26d14ebfe18b1f7b524bd39b404b50af5dc97866` (2025-01-24).
 - [ ] Read the dataset-card license AND the accepted use terms; record the
       verdict on trace republication in `data/README.md` before any dataset
-      row appears on a public site or repo. (Hub tag reads `cc-by-4.0` —
-      unverified for our use until you read the terms.)
-- [ ] Check the dataset viewer for category labels; derive categories if
-      absent (document the rule before any results). Freeze the ordered list
-      of 8 candidate held-out categories — seeded, sha256-hashed, committed.
-- [ ] Compute usable-row counts per category (post-filter) and record them —
-      filters depend only on dataset structure, so this needs no tag.
-- [ ] Run the tool-name leak check across the candidate split (dataset
-      structure only); apply the pre-registered replacement rule.
+      row appears on a public site or repo. (Phase F drafts the verdict from
+      the public card; the click-through terms still need the owner's
+      confirmation.)
+- [x] Pivot the split unit from category to tool. Freeze the ordered list of
+      12 candidate held-out tools — seed 42, sha256-hashed, committed in
+      `docs/CANDIDATES.md`.
+- [x] Compute post-filter single-tool counts per tool and the 71-tool
+      eligible pool — filters depend only on dataset structure, so this needs
+      no tag. Verify the 12 candidates against the 100-case floor.
+- [x] Run the leak check and distractor-exposure count across the candidates
+      (dataset structure only); document the 12-candidate replacement rule.
+- [x] Commit the reproducible verifier `scripts/select_candidates.py`; the
+      command in `docs/CANDIDATES.md` regenerates the frozen order and
+      sha256 and asserts both.
 
 ## Phase 1 — Match spec + scorer (the checker is the single point of failure)
-- [ ] Write `docs/MATCH_SPEC.md`: argument-type coercion, parallel-call
-      ordering, optional args, string case, numeric equivalence — every rule
-      explicit, no silent leniency.
-- [ ] Implement the scorer + deterministic partial credit (right tool,
-      per-field argument score; combination formula in the spec).
-- [ ] Hand-made right/wrong pair tests covering every spec rule, including
-      adversarial near-misses. These are required CI from day one.
-- [ ] Measurable: `pytest` green on the pair tests before any real scoring.
+- [x] Write `docs/MATCH_SPEC.md` v1.1: attempts, final-attempt selection,
+      pinned `tool_use` interface, gold normalization/exclusion, numeric
+      conversion, malformed-block precedence, exact-optimal assignment,
+      partial credit, lenient-string scope — every rule explicit, no silent
+      leniency. (Final for this revision, not pre-registered.)
+- [x] Implement the scorer + deterministic partial credit in
+      `src/eval/scorer.py` (per-case only; repeat averaging stays in the
+      harness).
+- [x] Hand-made right/wrong pair tests covering every spec rule, including
+      adversarial near-misses (`tests/test_scorer.py`). Required CI from day
+      one.
+- [x] Measurable: `pytest tests/test_scorer.py` green before any real
+      scoring.
 
 ## Phase 2 — Mini-set + agent skeleton + harness skeleton
 - [ ] ~20 hand-written tasks: pipeline smoke test and the seed of the
@@ -53,7 +62,7 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [ ] Pilot: ~30 cases per arm at k=1 (ceiling $1). Measure real tokens and
       cost per case per arm, failure modes, retry rate.
 - [ ] From the pilot: choose k; define the dev sample (seeded, stratified by
-      category, fixed size) with its own spend ceiling.
+      tool, fixed size, non-candidate tools only) with its own spend ceiling.
 - [ ] Cost feasibility gate: pilot cost ratio (haiku-agent ÷ sonnet-direct,
       list price) must clear 0.10 or the cost claim is redesigned/dropped now.
 - [ ] Effort selection: small slices at candidate efforts per arm under the
@@ -62,31 +71,30 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [ ] Run all three arms on the dev sample at the chosen k and efforts.
       (Variance is measured at the final k — averaging repeats changes
       per-case variance, so sizing from a different k would mislead.)
-- [ ] Measure: within-category variance, discordant rate,
-      leave-one-category-out between-category spread, real token counts per
-      arm (verify logged tokens include thinking tokens).
-- [ ] Effort selection: run a small dev slice at candidate effort values per
-      arm (verify allowed values in the docs); fix per-arm effort for
-      pre-registration.
+- [ ] Measure: within-tool variance, discordant rate, leave-one-tool-out
+      between-tool spread, real token counts per arm (verify logged tokens
+      include thinking tokens).
 - [ ] Fix the failure-policy table against observed failures (EVAL_DESIGN §4).
 - [ ] Dry-run the full analysis pipeline on dev outputs (estimator, both
       intervals, cost ratio, results JSON).
-- [ ] **Feasibility check, before pre-registration:** LOCO s_pess and the
-      pilot cost ratio against the §7 power inequality and the 0.10 cost bar.
-      A doomed design is caught here, not after the tag.
+- [ ] **Feasibility check, before pre-registration:** leave-one-tool-out
+      s_pess and the pilot cost ratio against the §7 power inequality and the
+      0.10 cost bar. A doomed design is caught here, not after the tag.
 - [ ] Measurable: a dev results JSON with the sizing inputs (s_within²,
-      LOCO s_cat spread).
+      leave-one-tool-out s_tool spread, m = dev tools, u).
 
 ## Phase 4 — Pre-registration + split freeze
 - [ ] Write `docs/PRE_REGISTRATION.md` (contents per EVAL_DESIGN §13):
       hypothesis, margin, assumed gap, cost definition, model IDs, effort
-      values, prompt versions, tool schemas, `max_tokens`, match-spec version,
-      k per arm with the **closed budget arithmetic**, analysis plan, primary
-      vs secondary comparisons, failure policy, sampling seed.
+      values, prompt versions, tool schemas, `max_tokens`, match-spec version
+      (v1.1), k per arm with the **closed budget arithmetic**, analysis plan,
+      primary vs secondary comparisons, failure policy, sampling seed, the 12
+      ordered candidates, distractor exposure, and the leak-check result.
 - [ ] Commit **and git-tag** it. The tag is the proof of "dated and committed."
 - [ ] Materialize the test rows deterministically from the Phase-0 seeds
-      (C from {6, 7, 8} chosen on the LOCO estimate); verify the sizing
-      target on post-filter usable rows; record checksums in `data/README.md`.
+      (C from {6, 7, 8} chosen on the leave-one-tool-out estimate, selected
+      from the frozen 12 candidate tools); verify the sizing target on
+      post-filter usable rows; record checksums in `data/README.md`.
       Record C and its reason in `PRE_REGISTRATION.md` **before** the tag —
       it is not chosen at materialization.
 - [ ] Measurable: tag exists; test split checksums in `data/README.md`.

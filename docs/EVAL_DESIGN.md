@@ -30,18 +30,18 @@ is the proof. Required contents (see section 13):
 Sonnet-5.5 direct-prompt baseline on single-turn tool-calling accuracy, at no
 more than one-tenth the token cost.
 
-Formally: let `d_c` = mean paired difference (`haiku-agent` −
-`sonnet-direct`) in held-out category `c`, averaged over `n_c` cases with
-the **same `n_c` in every category** (repeats averaged within a case first).
-The estimand is the **equal-weighted average over categories**,
-`d̄ = (1/C)·Σ_c d_c` — which, with equal `n_c`, coincides with the pooled
+Formally: let `d_t` = mean paired difference (`haiku-agent` −
+`sonnet-direct`) in held-out tool `t`, averaged over `n_t` cases with
+the **same `n_t` in every tool** (repeats averaged within a case first).
+The estimand is the **equal-weighted average over held-out tools**,
+`d̄ = (1/C)·Σ_t d_t` — which, with equal `n_t`, coincides with the pooled
 per-case mean. Non-inferiority is declared if the lower bound of the 95%
-t-interval `d̄ ± t(0.975, C−1)·s_cat/√C` stays above **−5 points**
+t-interval `d̄ ± t(0.975, C−1)·s_tool/√C` stays above **−5 points**
 (section 7), and the cost ratio (Haiku-agent list-price token cost per task
 ÷ Sonnet-direct list-price token cost per task) clears its pre-registered
-rule: the **upper bound of the 95% t-interval on per-category log cost
+rule: the **upper bound of the 95% t-interval on per-tool log cost
 ratios ≤ 0.10** (exponentiated back to ratio scale), interval reported
-alongside, with a case-level bootstrap as sensitivity check. (A category
+alongside, with a case-level bootstrap as sensitivity check. (A tool
 bootstrap is avoided here for the same few-clusters reason as in §7.)
 
 Language rule: Sonnet 5.5 is "a mid-tier model, ~20x pricier per token." It is
@@ -163,38 +163,62 @@ it.
   any dataset row appears on a public site or in a public repo. Until then:
   dashboard traces use hand-written tasks and model outputs only, or link to
   the dataset.
-- **Invalid-row filters — defined before the split freezes, applied before it:**
-  function name in `answers` not present in `tools`; required arguments empty;
-  `answers` empty where a call is expected. (Community discussion flagged ~472
-  invalid + ~1,166 wrongly-empty rows; verify counts at download.)
-- **Categories are derived, then frozen.** xLAM rows carry only
-  id/query/answers/tools — no category label (the "21 categories" are the
-  paper's API taxonomy). Phase 0 checks the dataset viewer: if tool names
-  carry a consistent category prefix, the prefix is the category; otherwise
-  a derivation rule is written and documented **before any results exist**.
-  (The `math_toolkit.` prefix example is unverified — confirm against real
-  tool names in the viewer.)
-- **Leak, operationally:** the same tool name appearing in both splits counts
-  as a leak, even if the derived categories differ. Category disjointness is
-  the design; tool-name disjointness is the check. **Run the leak check in
-  Phase 0** — it needs only dataset structure. With C ≥ 6 drawn from 8
-  candidates, two leaks can be absorbed: a leaking selected category is
-  replaced by the next ordered candidate (pre-registered replacement rule);
-  if candidates are exhausted below C = 6, invoke the §7 fallback selection.
-- **Freeze order (corrected 2026-10-23):** Phase 0 freezes an **ordered list
-  of 8 candidate held-out categories** (seeded, sha256-hashed, committed).
-  Dev work — including viewing dev failures — is free afterward. Phase 4
-  materializes the test rows deterministically from the Phase-0 seeds,
-  verifies the sizing target against post-filter usable rows, and records
-  checksums. The failure policy freezes in pre-registration, not before dev.
+- **Cluster and split unit is the tool, not the category (pivot
+  2026-10-25).** xLAM rows carry only id/query/answers/tools; the "21
+  categories" are the paper's API taxonomy, not a split unit. The held-out
+  unit is a **tool name**. A case is a **single-tool case** when every gold
+  answer calls the same tool; only single-tool cases enter the per-tool
+  analysis. A case whose gold calls span more than one tool is not assigned
+  to a held-out tool.
+- **Invalid-row filters — defined before the split freezes, applied before
+  it:** answer-tools only (eligibility is defined by gold `answers`, never by
+  distractor `tools`); a gold function name not present in the row's `tools`
+  is excluded; an empty `answers` where a call is expected is excluded; a
+  gold call that omits a required parameter is excluded. Required parameters
+  are normalized with the pinned parameter-format normalizer: xLAM's flat map
+  `param -> {type, description, default?}` treats a parameter without a
+  `default` as required, and a nested JSON-Schema `properties`/`required`
+  form is also handled defensively. The pinned revision has 168,870 flat tool
+  declarations and zero nested declarations. The required-argument filter
+  removes 1,316 rows (11 of them with entirely empty arguments where required
+  parameters exist); none of those rows are single-tool candidate cases.
+  The candidate counts therefore survive every filter unchanged.
+- **Mixed cases are excluded and counted.** A case whose gold calls include
+  both a candidate held-out tool and a non-candidate tool is excluded from
+  the candidate counts; on the pinned revision that is 1,270 cases. A case
+  whose gold calls span more than one candidate tool (21 cases) is also not
+  a single-tool case and is not used in the v1 per-tool analysis.
+- **Leak, operationally (pivot):** a leak is a **held-out candidate tool
+  appearing as a gold/answer tool in dev**. Distractor appearances — a
+  candidate tool present in a row's `tools` list but not in its `answers` —
+  are **allowed, counted per candidate, and reported**. They do **not**
+  trigger replacement. The Phase-0 verifier reports distractor exposure for
+  every candidate. On the pinned revision the leak check is zero candidate
+  answer appearances in dev-eligible rows by construction, because dev is
+  defined by answer tools.
+- **Replacement rule for 12 candidates (not 8).** Phase 0 freezes an ordered
+  list of **12 candidate held-out tools** (seed 42, sha256-hashed, committed
+  in `docs/CANDIDATES.md`). The selected set is the first C candidates in
+  that order, with C ∈ {6, 7, 8} per §7. If a selected candidate leaks (a
+  gold answer in dev) or falls below the 100-case floor after a later filter,
+  it is replaced by the next unused candidate in the frozen order. With 12
+  candidates and C = 8 there are 4 spares; C = 7 leaves 5; C = 6 leaves 6.
+  If the spares are exhausted below C, invoke the §7 fallback selection.
+  Distractor exposure never consumes a spare.
+- **Freeze order (corrected 2026-10-25):** Phase 0 freezes the ordered list
+  of **12 candidate held-out tools**. Dev work — including viewing dev
+  failures — is free afterward. Phase 4 materializes the test rows
+  deterministically from the Phase-0 seeds, verifies the sizing target
+  against post-filter usable rows, and records checksums. The failure policy
+  freezes in pre-registration, not before dev.
 - **Usable rows are counted before the tag.** Filters depend only on dataset
   structure, not model outputs, so Phase 0 computes usable-row counts per
-  candidate category. Pre-registration sets `n_c` at or below the smallest
-  available count across the selected categories. If the sizing target needs
-  more than the minimum available, pre-reg either raises C or recomputes the
-  power check at the achievable `n_c` and picks a §7 fallback if it fails.
-- **Within-category sampling:** seeded uniform random; seeds committed in
-  Phase 0. The split must yield enough usable test rows to meet the sizing
+  candidate tool. Pre-registration sets `n_t` at or below the smallest
+  available count across the selected tools. If the sizing target needs more
+  than the minimum available, pre-reg either raises C or recomputes the
+  power check at the achievable `n_t` and picks a §7 fallback if it fails.
+- **Within-tool sampling:** seeded uniform random; seeds committed in Phase
+  0. The split must yield enough usable test rows per tool to meet the sizing
   target (section 7) *after* filtering.
 - **Mini-set:** ~20 hand-written tasks. Pipeline smoke test and the seed of the
   multi-step set. **Excluded from every reported headline number.**
@@ -221,21 +245,21 @@ ever disagree, the match spec governs.
   scores anything real. These pair tests are required CI from day one
   (MATCH_SPEC §9).
 
-## 7. Sizing — power under clustering
+## 7. Sizing — power under clustering by held-out tool
 
-The final interval clusters by category, so the sizing is about
-**categories**, not cases. (Two earlier drafts were corrected 2026-10-23:
-sizing for interval width alone passes only ~50% of the time at true
-equality, and a case-level formula assumes independent cases that the
-clustered analysis does not have. Both are replaced below.)
+The final interval clusters by **held-out tool**, so sizing is about
+**tools**, not cases. (The 2026-10-23 drafts corrected interval-width sizing
+and the case-level independence assumption; the 2026-10-25 pivot replaces
+"category" with "tool" and re-derives every quantity below rather than
+renaming it.)
 
-- Let `d_c` = mean paired difference (agent − sonnet) in held-out category
-  `c`, averaged over cases with repeats averaged within a case first.
-- **Primary interval:** t-interval on the `d_c`:
-  `d̄ ± t(0.975, C−1) · s_cat / √C`, where `s_cat` = sample SD of the `d_c`
-  and `C` = number of held-out categories. A case-level (unclustered)
-  bootstrap CI is reported alongside as a sensitivity check; if they
-  disagree substantially, say so — the clustered interval governs.
+- Let `d_t` = mean paired difference (agent − sonnet) in held-out tool `t`,
+  averaged over cases with repeats averaged within a case first.
+- **Primary interval:** t-interval on the `d_t`:
+  `d̄ ± t(0.975, C−1) · s_tool / √C`, where `s_tool` = sample SD of the `d_t`
+  and `C` = number of held-out tools. A case-level (unclustered) bootstrap CI
+  is reported alongside as a sensitivity check; if they disagree
+  substantially, say so — the clustered interval governs.
 - Non-inferiority: the t-interval's **lower bound above −δ** (δ = 0.05).
 - **Sign convention (locked 2026-10-23):** Δ = assumed true mean difference,
   **signed** (agent − sonnet). Δ = 0 is the default; Δ = −0.02 means "we
@@ -243,57 +267,67 @@ clustered analysis does not have. Both are replaced below.)
   this convention in words — never as a bare number.
 - ~80% power needs
 
-  `(t(0.975, C−1) + t(0.80, C−1)) · s_cat / √C < δ + Δ`
+  `(t(0.975, C−1) + t(0.80, C−1)) · s_tool / √C < δ + Δ`
 
   with Δ signed. Worked meaning: at fixed C, a 2-point assumed shortfall
   (Δ = −0.02) demands (0.05/0.03)^2 ≈ 2.8× the effective sample size —
-  equivalently, s_cat must be ~0.6× as large, so the C = 8 bar of 4.3 points
-  drops to ~2.6 points. That is demanding: run the feasibility check against
-  the LOCO estimate early (Phase 3), before pre-registration. (The previous
-  draft wrote δ + Δ while describing Δ as a positive gap — that sign error
-  would have *halved* n exactly when it matters most.)
+  equivalently, s_tool must be ~0.6× as large, so the C = 8 bar of 4.3
+  points drops to ~2.6 points. That is demanding: run the feasibility check
+  against the leave-one-tool-out (LOTO) estimate early (Phase 3), before
+  pre-registration. (The previous draft wrote δ + Δ while describing Δ as a
+  positive gap — that sign error would have *halved* n exactly when it
+  matters most.)
 - **If Δ ≤ −δ, no n establishes non-inferiority.** The pre-registration then
   chooses, before any test data: a wider margin justified a priori, lower
   power stated openly, or the binary framing dropped in favor of reporting
   the interval. Never chosen after seeing test results — choosing on dev
-  LOCO evidence is intended and fine.
-- `s_cat` is estimated by **leave-one-category-out on dev**: per-category
-  mean differences across dev categories, SD across them. **Size to the
-  pessimistic end** of that spread — dev categories differ from test
-  categories, so dev's variance may not carry over.
-- **Variance components (corrected 2026-10-23).** The LOCO spread mixes two
-  things: true between-category variance τ² and within-category sampling
-  noise at dev's per-category n. Separate them:
-  - `τ̂² = max(0, observed_LOCO_var − mean_c(σ²_within,c / n_dev,c))`,
-    where σ²_within,c is the within-category variance of per-case paired
+  LOTO evidence is intended and fine.
+- `s_tool` is estimated by **leave-one-tool-out on dev**: per-tool mean
+  differences across dev tools, SD across them. **Size to the pessimistic
+  end** of that spread — dev tools differ from test tools, so dev's variance
+  may not carry over.
+- **Variance components (re-derived 2026-10-25).** The LOTO spread mixes two
+  things: true between-tool variance τ² and within-tool sampling noise at
+  dev's per-tool n. Separate them:
+  - `τ̂² = max(0, observed_LOTO_var − mean_t(σ²_within,t / n_dev,t))`,
+    where σ²_within,t is the within-tool variance of per-case paired
     differences (repeats averaged first).
-  - Predicted test-time spread: `s_pred² = τ̂² + σ²_within / n_c`.
+  - Predicted test-time spread: `s_pred² = τ̂² + σ²_within / n_t`.
   - The pessimistic uplift applies to the **τ̂ component only** (the part
-    estimated from ~13 categories; the within-category part rests on
-    hundreds of cases): `s_pess² = (u·τ̂)² + σ²_within/n_c`,
-    `u = √((m−1)/χ²_{0.20, m−1})`, m = dev categories in LOCO. χ²_{0.20, m−1}
-    denotes the lower-20% quantile (P(X ≤ x) = 0.20), so this is an 80%
-    upper confidence limit; computed u ≈ 1.24 at m = 13.
-  - The power inequality uses s_pess. (Plugging the mixed LOCO SD straight
-    in inflates s by ~12% under the n_c rule below — small, but the
-    components version is the right derivation.)
-  - If τ̂² ≈ 0, use the 100-case floor for n_c and note the interval is
+    estimated from m dev tools; the within-tool part rests on the eligible
+    tools' hundreds of cases): `s_pess² = (u·τ̂)² + σ²_within/n_t`,
+    `u = √((m−1)/χ²_{0.20, m−1})`, **m = number of dev tools in the LOTO
+    estimate**. χ²_{0.20, m−1} denotes the lower-20% quantile
+    (P(X ≤ x) = 0.20), so this is an 80% upper confidence limit.
+    **m is no longer 13.** The planning baseline uses the 59 eligible dev
+    tools (71 eligible tools minus the 12 held-out candidates), which gives
+    **u ≈ 1.090**; the old u ≈ 1.240 at m = 13 must not be carried over. If
+    Phase 3's dev sample includes dev tools below the 100-case eligibility
+    floor, recompute m and u from the actual dev-tool set before
+    pre-registration. u is never inherited from a different m.
+  - The power inequality uses s_pess. (Plugging the mixed LOTO SD straight
+    in inflates s under the n_t rule below — small, but the components
+    version is the right derivation.)
+  - If τ̂² ≈ 0, use the 100-case floor for n_t and note the interval is
     within-noise-driven.
 - **C-selection rule (pre-registered, no discretion):** the smallest C in
   {6, 7, 8} that (a) passes the power inequality at the pessimistic s_pess
-  and (b) fits the budget ledger. A larger C always helps the interval, so
-  the trade-off is only dev categories and cost. If even C = 8 fails (a),
-  pre-registration names one §7 fallback (wider margin / lower power / drop
-  binary framing), chosen on dev evidence. Worked check: at C = 6 the
-  t-quantiles sum to 2.571 + 0.920 = 3.491, so 80% power at Δ = 0 needs
-  s_pess < 3.5 points; at C = 8 the bar is s_pess < 4.3 points.
-- **One `n_c` for every held-out category** — the max of the per-category
+  and (b) fits the budget ledger. C is a number of **held-out tools** drawn
+  from the frozen ordered **12-candidate** list; the selected tools are the
+  first C non-leaking, floor-clearing candidates in that order, with the §5
+  replacement rule. A larger C always helps the interval, so the trade-off
+  is only dev tools and cost. If even C = 8 fails (a), pre-registration
+  names one §7 fallback (wider margin / lower power / drop binary framing),
+  chosen on dev evidence. Worked check: at C = 6 the t-quantiles sum to
+  2.571 + 0.920 = 3.491, so 80% power at Δ = 0 needs s_pess < 3.5 points; at
+  C = 8 the bar is s_pess < 4.3 points.
+- **One `n_t` for every held-out tool** — the max of the per-tool
   requirements, floor 100 usable cases — so the pooled per-case mean
-  coincides with §1's equal-weighted estimand. Per-category requirement:
-  within-category SE ≤ τ̂/2 (i.e. `n_c ≥ 4 · σ²_within / τ̂²`), using the
-  between-category component, not the mixed spread.
-  Adding cases within a category does not narrow the clustered interval —
-  only more categories (or less between-category spread) do.
+  coincides with §1's equal-weighted estimand. Per-tool requirement:
+  within-tool SE ≤ τ̂/2 (i.e. `n_t ≥ 4 · σ²_within / τ̂²`), using the
+  between-tool component, not the mixed spread. Adding cases within a tool
+  does not narrow the clustered interval — only more tools (or less
+  between-tool spread) do.
 - **Dev variance is measured at the final k.** Averaging repeats changes
   per-case variance, so sizing from a different k would mislead.
 - **Report the interval and what it excludes**, not just a binary pass/fail.
@@ -302,13 +336,12 @@ clustered analysis does not have. Both are replaced below.)
 
 - **Pilot first — Phase 3 opens with this.** ~30 cases per arm at k = 1
   (pilot ceiling $1, pure measurement, no pre-registration needed), drawn
-  only from non-candidate categories — the 8 frozen candidates are held out
-  from all dev work. Measure real tokens and cost per case per arm, failure
-  modes, retry rate. From the
-  pilot: choose k, then define the dev sample (seeded, stratified by
-  category, fixed size, non-candidate categories only) — each with its own
-  spend ceiling. The ledger records dev spend after the fact, so it cannot
-  prevent an overrun; the **ceilings** prevent it.
+  only from non-candidate tools — the 12 frozen candidates are held out from
+  all dev work. Measure real tokens and cost per case per arm, failure
+  modes, retry rate. From the pilot: choose k, then define the dev sample
+  (seeded, stratified by tool, fixed size, non-candidate tools only) — each
+  with its own spend ceiling. The ledger records dev spend after the fact,
+  so it cannot prevent an overrun; the **ceilings** prevent it.
 - **Cost feasibility gate, right after the pilot.** Compute the pilot cost
   ratio (haiku-agent ÷ sonnet-direct, list price). If it already exceeds
   0.10 at the pilot efforts, the cost claim fails regardless of accuracy —
@@ -319,7 +352,7 @@ clustered analysis does not have. Both are replaced below.)
   change, in which case the variance inputs are re-measured at the new k.
   Token counts come from **real dev measurement** (xLAM prompts may be far
   smaller than 5k tokens — do not size the budget on guesses). The test-spend
-  term is `sum_over_arms(C * n_c * k_arm * measured_cost_per_case)`.
+  term is `sum_over_arms(C * n_t * k_arm * measured_cost_per_case)`.
 - If it doesn't close, pick **one** of these in pre-registration — never after
   seeing results: a wider margin justified a priori, lower power stated openly,
   or a higher cap.
@@ -411,9 +444,8 @@ its false-alarm rate is measured:
   the non-inferiority margin, a κ miss, a budget abort — reported with the
   same prominence as the wins. The margin applies to the primary comparison
   only; secondaries get intervals, never pass/fail.
-- **Limitations section, mandatory:** held-out xLAM categories test shift
-  *within one synthetic generator*. That is not real-world generalization;
-  say so.
+- **Limitations section, mandatory:** held-out xLAM tools test shift *within
+  one synthetic generator*. That is not real-world generalization; say so.
 - v2 candidates: BFCL as an external check, a larger multi-step set.
 
 ## 12. Dashboard
@@ -449,28 +481,30 @@ touched:
    selection rule and tolerance** (section 2), prompt versions, tool schemas,
    `max_tokens`, **tool-use interface pin** (no server-side schema
    enforcement; harness validates)
-4. Match-spec version
+4. Match-spec version (v1.1, the final version in `docs/MATCH_SPEC.md`)
 5. k per arm + the ledger inequality closed on actuals
    (`20.00 − pilot − effort_slices − dev − judge − multistep_traces
    − opus_spot − CI − reserve ≥ test`), or the chosen fallback:
    wider margin justified a priori / lower power stated openly / higher cap
-6. Analysis plan: t-interval estimator on per-category mean differences,
+6. Analysis plan: t-interval estimator on per-tool mean differences,
    case-level bootstrap as sensitivity check, cost-ratio definition (upper
-   bound of the 95% t-interval on per-category log cost ratios ≤ 0.10),
-   sizing inputs (variance components: τ̂², σ²_within, LOCO spread with the
-   pessimistic upper-limit rule, C-selection rule outcome, Δ with sign
-   convention) and the resulting C and n_c
+   bound of the 95% t-interval on per-tool log cost ratios ≤ 0.10), sizing
+   inputs (variance components: τ̂², σ²_within, leave-one-tool-out spread
+   with the pessimistic upper-limit rule, m = dev tools and the resulting u,
+   C-selection rule outcome, Δ with sign convention) and the resulting C and
+   n_t
 7. Primary comparison (`haiku-agent` vs `sonnet-direct`); secondary
    (`haiku-direct`) with intervals only, no pass/fail
 8. Failure-policy table (section 4) and any pre-registered exclusions
-9. Sampling: the 8 ordered candidate held-out categories (from Phase 0),
-   usable-row counts per candidate (computed Phase 0), the selected C with
-   reason, within-category seeds, filter definitions
+9. Sampling: the 12 ordered candidate held-out tools (from Phase 0 in
+   `docs/CANDIDATES.md`), usable-row counts per candidate, distractor
+   exposure per candidate, the leak-check result, the selected C with
+   reason, within-tool seeds, and the filter definitions
 
 ## 14. What "done" looks like
 
 - Pre-registration tagged before the test rows are materialized (candidate
-  categories frozen since Phase 0).
+  tools frozen since Phase 0).
 - Analysis pipeline validated end-to-end on dev outputs before the tag.
 - Agent runs end-to-end on dev, test, and multi-step sets from one command.
 - Results: the paired interval, the cost ratio, CIs attached, negative results

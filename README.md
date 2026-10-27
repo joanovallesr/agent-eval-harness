@@ -11,8 +11,9 @@ portfolios skip. This project proves it:
 
 1. **Raw-API agent** — tool-use loop, schema-validation retries, budgets. No LangChain/LangGraph magic.
 2. **Honest benchmark** — public tool-calling dataset (xLAM-60k, revision pinned),
-   held-out tool categories, and a Sonnet-5.5 direct-prompt comparison arm
-   (a mid-tier model ~20x pricier per token — never called "frontier").
+   held-out tools (the cluster and split unit; the paper's "categories" are
+   descriptive only), and a Sonnet-5.5 direct-prompt comparison arm (a
+   mid-tier model ~20x pricier per token — never called "frontier").
    The locked claim is non-inferiority on accuracy at ≤ 1/10th the token cost.
 3. **Calibrated judge, scoped** — an LLM judge from a **different model family**
    (GPT-6 Luna) serves the secondary multi-step question only: blind labels,
@@ -35,15 +36,22 @@ agent-eval-harness/
 │   └── tools.py      # tool definitions (JSON schemas + implementations)
 ├── src/eval/         # evaluation harness
 │   ├── harness.py    # run loop: cases -> agent -> trace -> score
+│   ├── scorer.py     # schema-free per-case matcher (MATCH_SPEC v1.1)
 │   ├── judge.py      # LLM-as-judge (different model family from the agent)
 │   ├── metrics.py    # pass@k, cost/task, latency, accuracy
 │   └── calibration.py# judge calibration vs human labels (Cohen's kappa)
-├── tests/            # pytest: unit tests + harness smoke tests
+├── tests/            # pytest: scorer pair tests + harness smoke tests
+├── scripts/
+│   └── select_candidates.py # reproducible Phase-0 candidate verifier
 ├── docs/
+│   ├── PROJECT_PLAN.md     # phase-by-phase build sequence
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
-│   └── FAILURE_TAXONOMY.md # what can go wrong, and how it's labeled
+│   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
+│   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
+│   ├── BUDGET.md           # $20 ledger and ceilings
+│   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 ├── data/             # benchmark subsets live here (gitignored, see data/README.md)
-└── .github/workflows/ci.yml  # lint + tests + eval gate
+└── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
 ```
 
 ## Quickstart (once implemented)
@@ -52,7 +60,7 @@ agent-eval-harness/
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 # request access to the gated xLAM-60k dataset, then:
-python -m src.eval.harness --subset data/xlam60k_dev.jsonl --judge
+python -m src.eval.harness --subset data/xlam60k_dev.jsonl
 ```
 
 ## Ground rules (from the resume quest)
@@ -60,4 +68,8 @@ python -m src.eval.harness --subset data/xlam60k_dev.jsonl --judge
 - Nothing is claimed on the resume until it's merged and measured.
 - Every before-number must pre-exist (git history, config) or be runnable once, cheaply.
 - Small-n claims carry 95% confidence intervals or paired comparisons.
-- Held-out tool domains are never touched during development.
+- Held-out tools are never touched as gold/answer tools during development.
+  Candidate tools may appear as distractors in dev rows; that exposure is
+  counted and disclosed, not banned (`docs/CANDIDATES.md`).
+- `docs/FAILURE_TAXONOMY.md` is a descriptive diagnostic vocabulary, not a
+  filter or an exclusion list.

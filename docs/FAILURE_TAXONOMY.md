@@ -1,8 +1,13 @@
 # Failure Taxonomy
 
+This is a **descriptive diagnostic vocabulary**, not a filter or an exclusion
+list. A label never changes a score, drops a case, or rescues a failed arm; it
+explains a failure after the MATCH_SPEC score is computed. Scores come from
+`docs/MATCH_SPEC.md`; this file only classifies what went wrong.
+
 Every dev-set failure gets one of these labels. The taxonomy is the interesting
 artifact — it turns "the score is 78%" into "here's exactly what's wrong and what
-to fix." Update the categories as real failures show up; delete ones that never
+to fix." Update the labels as real failures show up; delete ones that never
 fire.
 
 ## Tool selection
@@ -30,6 +35,6 @@ fire.
 1. Label from the trace, not from vibes — link the tool call that went wrong.
 2. One primary label per failure; note a secondary if the chain matters.
 3. When two labelers disagree, that's data: record the disagreement and tighten
-   the category definition.
+   the label definition.
 4. Re-run the taxonomy counts after every agent change. The delta is the story
    ("fixed 6 of 9 wrong-order failures with the planner prompt").

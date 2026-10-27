@@ -6,8 +6,10 @@ pin, the checksums, and the license/terms verdict.
 
 ## Sources
 
-1. **xLAM-60k** (Salesforce) — 60,000 tool-calling entries, 3,673 APIs,
-   21 tool categories. Load with
+1. **xLAM-60k** (Salesforce) — 60,000 tool-calling entries, 3,605 distinct
+   tool names in the pinned revision, 21 API categories. The categories are
+   the paper's descriptive taxonomy only; the **split and cluster unit is the
+   tool**. Load with
    `datasets.load_dataset("Salesforce/xlam-function-calling-60k", revision="<pinned-hash>")`.
    Access granted 2026-10-23 (click-through; gated: auto).
 2. **Hand-written mini-set** (`miniset.jsonl`, ~20 tasks) — pipeline smoke
@@ -26,8 +28,7 @@ Bare "xLAM-60k" is not a fixed artifact — the July 2024 regeneration changed
 rows.
 
 ```
-# paste the pinned revision hash here at download:
-PINNED_REVISION=
+PINNED_REVISION=26d14ebfe18b1f7b524bd39b404b50af5dc97866
 ```
 
 ## License / republication verdict
@@ -39,14 +40,24 @@ PINNED_REVISION=
 
 ## Splits
 
-Split by **tool category**, never randomly. Categories in the held-out set
-never appear in dev. Invalid-row filters (EVAL_DESIGN §5) are applied **before**
-the split freezes.
+Split by **tool**, never randomly. A held-out tool never appears as a
+gold/answer tool in dev. Candidate tools **may** appear as distractors in a
+dev row's `tools` list; that exposure is counted per candidate and disclosed,
+and it does **not** trigger replacement. The frozen candidate order, seed,
+sha256, eligibility filters, and per-candidate counts are in
+`docs/CANDIDATES.md`; rerun `scripts/select_candidates.py` to reproduce them.
+
+Invalid-row filters (EVAL_DESIGN §5) are applied **before** the split
+freezes: answer-tools only, bad/missing answer names, empty answers, missing
+required arguments, and mixed candidate+non-candidate cases (excluded and
+counted). Phase 0 on the pinned revision found 71 eligible tools with at
+least 100 single-tool cases; all 12 frozen candidates clear the floor after
+every filter.
 
 | File | Content |
 |---|---|
-| `xlam60k_dev.jsonl` | dev categories — tune freely here |
-| `xlam60k_test_heldout.jsonl` | held-out categories — run once, no tuning |
+| `xlam60k_dev.jsonl` | dev tools — tune freely here |
+| `xlam60k_test_heldout.jsonl` | held-out tools — run once, no tuning |
 | `miniset.jsonl` | hand-written smoke tasks |
 | `multistep.jsonl` | hand-written multi-step tasks + mock tools |
 | `multistep_labels_tune.jsonl` | ~30 blind human labels (judge tuning) |

@@ -25,7 +25,7 @@ use list-price token costs; actual spend is reported separately.
 | opus_spot (~50 cases, optional) | — | — | only if budget allows |
 | ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
 | reserve (1 aborted+resumed test run) | — | — | most expensive arm |
-| **test_spend** | — | — | `C · n_c · k · measured_cost/case` |
+| **test_spend** | — | — | `C · n_t · k · measured_cost/case` |
 
 Second line of defense: a provider-console spend limit (set up in Phase 2).
 The harness per-run ceiling is the third.
