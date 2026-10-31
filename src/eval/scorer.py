@@ -37,6 +37,8 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Any, NamedTuple
 
+from scipy.optimize import linear_sum_assignment
+
 
 class GoldFormatError(ValueError):
     """A gold row must be excluded (MATCH_SPEC §1.3), not scored."""
@@ -363,16 +365,17 @@ def _call_score(
     return equal / len(keys)
 
 
-def _optimal_sum(
+def _optimal_sum_dp(
     predicted: list[_PredCall],
     gold: tuple[GoldCall, ...],
     *,
     lenient: bool,
 ) -> float:
-    """Exact optimal one-to-one assignment (MATCH_SPEC §3).
+    """Reference implementation: exact optimal assignment by subset DP.
 
-    Subset DP over gold calls. Any exact optimum is permitted by the spec;
-    this implementation is exact and avoids factorial permutation search.
+    This is the original Phase-1 implementation, kept for equivalence tests.
+    It is exponential in the number of gold calls and is not used by
+    :func:`score_case`.
     """
 
     @lru_cache(maxsize=None)
@@ -394,6 +397,33 @@ def _optimal_sum(
         return best_score
 
     return best(0, 0)
+
+
+def _optimal_sum(
+    predicted: list[_PredCall],
+    gold: tuple[GoldCall, ...],
+    *,
+    lenient: bool,
+) -> float:
+    """Exact optimal one-to-one assignment (MATCH_SPEC §3).
+
+    Max-weight bipartite matching via the Hungarian algorithm. MATCH_SPEC
+    permits any exact optimum; the assignment is polynomial-time and returns
+    the same optimal sum as :func:`_optimal_sum_dp`.
+    """
+
+    if not predicted or not gold:
+        return 0.0
+
+    scores = [
+        [
+            _call_score(predicted_call, gold_call, lenient=lenient)
+            for gold_call in gold
+        ]
+        for predicted_call in predicted
+    ]
+    row_ind, col_ind = linear_sum_assignment(scores, maximize=True)
+    return float(sum(scores[row][column] for row, column in zip(row_ind, col_ind)))
 
 
 def score_case(
