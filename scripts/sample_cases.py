@@ -68,8 +68,12 @@ def _json_schema_type(raw_type: Any) -> str | None:
     head = raw_type.split(",", 1)[0].strip()
     if head == "str" or head.startswith("str"):
         return "string"
+    # xLAM's declared "int" is not reliable: some gold calls carry float
+    # values (for example coordinates). Treat both numeric declarations as
+    # JSON Schema "number" so a gold-shaped call is never rejected by the
+    # loop validator; the schema-free scorer still compares values exactly.
     if head == "int" or head.startswith("int"):
-        return "integer"
+        return "number"
     if head == "float" or head.startswith("float"):
         return "number"
     if head == "bool" or head.startswith("bool"):
@@ -106,7 +110,10 @@ def convert_tool_definition(tool: Mapping[str, Any]) -> dict[str, Any]:
         property_schema: dict[str, Any] = {}
         schema_type = _json_schema_type(descriptor.get("type"))
         if schema_type is not None:
-            property_schema["type"] = schema_type
+            # Some xLAM gold calls pass null for a non-null-declared parameter.
+            # Allow null so a gold-shaped call is schema-valid; the scorer
+            # still applies exact value comparison.
+            property_schema["type"] = [schema_type, "null"]
         description = descriptor.get("description")
         if isinstance(description, str):
             property_schema["description"] = description
@@ -224,11 +231,11 @@ def apply_final_filters(
         for candidate in exposed:
             distractor_rows[candidate] += 1
 
+        # The pinned revision has a few rows with duplicate tool declarations;
+        # the API tool list is keyed by name, so emit one definition per name.
         definitions = [
             convert_tool_definition(tool_definition)
-            for tool_definition in tools_list
-            if isinstance(tool_definition, dict)
-            and isinstance(tool_definition.get("name"), str)
+            for tool_definition in tools.values()
         ]
         # Keep row order for tool definitions; the API is order-insensitive.
         case = {
@@ -408,7 +415,9 @@ def load_rows_from_cache(revision: str = PINNED_REVISION, split: str = "train"):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", required=True, choices=("pilot", "dev"))
+    parser.add_argument(
+        "--stage", required=True, choices=("pilot", "effort", "dev")
+    )
     parser.add_argument("--n-tools", type=int, required=True)
     parser.add_argument("--cases-per-tool", type=int, required=True)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
