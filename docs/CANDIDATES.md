@@ -6,7 +6,7 @@ final C held-out tools are selected from this ordered list in Phase 4 (C ∈
 elsewhere and are not decided here.
 
 - Frozen: **2026-10-26** (design pivot dated 2026-10-25).
-- Owner decisions recorded **2026-10-26**; see below.
+- I recorded these decisions **2026-10-26**; see below.
 - Dataset: `Salesforce/xlam-function-calling-60k`.
 - Pinned revision: `26d14ebfe18b1f7b524bd39b404b50af5dc97866` (2025-01-24).
 - Seed: **42**.
@@ -17,7 +17,7 @@ elsewhere and are not decided here.
 - Phase-0 generator code commit (frozen order logic unchanged):
   `847a7de4c8e842087ed3a87c12d9b681ac57ce87` (`scripts/select_candidates.py`).
 
-## Decision status (owner, 2026-10-26)
+## Decision status (my decisions, 2026-10-26)
 
 1. **Required-arguments filter — FINAL: description-aware refinement.**
    Exclude only **core-input** missing rows. A missing parameter is **not** a
@@ -49,7 +49,7 @@ elsewhere and are not decided here.
    score of 0. Zero occurrences on the pinned revision (defensive only).
 4. **License / republication verdict — rule approved, verdict not approved.**
    No raw dataset rows, queries, answers, full tool schemas, or reproducing
-   traces are published until the owner confirms the verdict
+   traces are published until I confirm the verdict
    (`data/README.md`).
 5. **Frozen order — FINAL.** The order is generated from the **71-tool
    structural pool** (before the required-arguments filter), seed 42, sha256
@@ -125,14 +125,14 @@ reported below. It never triggers replacement.
 | **Eligible tools under the FINAL required-arguments rule** | **70** |
 | Eligible tools under the interim heuristic (historical) | 63 |
 
-**Frozen order — FINAL (owner, 2026-10-26).** The order is generated from the
-**71-tool structural pool** locked in Phase 0. The final description-aware
+**Frozen order — FINAL (my decision, 2026-10-26).** The order is generated
+from the **71-tool structural pool** locked in Phase 0. The final description-aware
 rule yields a **70-tool usable pool**; that pool is used for sizing, never to
 re-roll the order. The verifier recomputes both pools and asserts that the 12
 candidate counts are **identical under both** (all clear 100). The order is
 not re-rolled from the 70-tool pool, because the candidate list was frozen
-before the required-arguments rule was settled and the instruction is
-explicitly not to re-roll candidates. If a candidate had lost cases to this
+before the required-arguments rule was settled and I explicitly instructed
+not to re-roll candidates. If a candidate had lost cases to this
 filter, it would be flagged and a spare would cover it; none did. The 70 vs
 71 difference is `integrate` falling 101 → 95 usable cases; `integrate` is not
 a candidate. Dropping the filter entirely returns the pool to 71; no candidate
@@ -222,7 +222,7 @@ fallback applies. Distractor exposure never consumes a spare.
 
 - No raw xLAM rows, queries, answers, or full tool schemas.
 - No license verdict: the publication rule is approved, the verdict is not.
-- No Phase-3 number for `m`, `u`, `C`, or `n_t`: decision 2 fixes the
+- No Phase-3 number for `m`, `u`, `C`, or `n_t`: my decision 2 fixes the
   **rule** (≥10 usable Phase-3 dev cases per dev tool), while the concrete
   values require Phase 3 variance components.
 - No test-split materialization and no pre-registration file or tag.

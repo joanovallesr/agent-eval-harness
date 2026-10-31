@@ -22,7 +22,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 3 Stage 2 complete; Stage 3 proposal pending approval
+## Status: Phase 3 Stage 2 complete; Stage 3 proposal pending my approval
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -37,9 +37,10 @@ variance components and §7 sizing, and effort plumbing. The Stage 1 pilot ran
 on 30 shared non-candidate-tool cases at k=1 for **$0.095948** total; those
 numbers are `pilot` only and excluded from headline results. The aggregate
 pilot list-price cost ratio was **0.0532**, clearing the pre-set 0.10 gate.
-Stage 2 effort slices completed under the owner-approved **$1.03** ceiling at
-**$1.023421**. The §2 selection functions chose Haiku shared = **`low`** and
-Sonnet = **`api_default`**. The Sonnet choice rests on a one-case margin over
+I approved raising the Stage 2 ceiling to **$1.03**; the effort slices
+completed under it at **$1.023421**. The §2 selection functions chose Haiku
+shared = **`low`** and Sonnet = **`api_default`**. The Sonnet choice rests on
+a one-case margin over
 `max` and is recorded as noise-level evidence. No Stage 3 run has started and
 no `docs/PRE_REGISTRATION.md` exists.
 
@@ -74,7 +75,7 @@ agent-eval-harness/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
-│   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit for owner sign-off
+│   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit for my sign-off
 │   ├── BUDGET.md           # $20 ledger and ceilings
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
@@ -128,7 +129,7 @@ are already included in `output_tokens` and are not added again. Batch rates
 are excluded. Cost is computed from logged usage, never from token estimates.
 
 Batch direct-prompt submission is **deferred and out of scope for Phase 2**
-(owner decision 2026-10-31). All runs use synchronous list-price accounting
+(my decision, 2026-10-31). All runs use synchronous list-price accounting
 (`pricing_basis: "list_sync"`); the design's batch path remains a later-phase
 item and is not mixed into the Phase-2 cost basis.
 

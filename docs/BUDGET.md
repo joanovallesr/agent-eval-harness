@@ -31,10 +31,10 @@ use list-price token costs; actual spend is reported separately.
 Phase 3 offline tooling (Task 0 resume fix + Task A sampling/analysis/effort
 plumbing) completed with **$0.000000** model spend. The Stage 1 pilot then
 completed under its **$1.00** ceiling with **$0.095948** actual list-price
-spend. Stage 2 was resumed under the owner-approved **$1.03** ceiling and
-completed: **$1.023421** actual list-price spend. The ledger total now stands at
+spend. I approved raising the Stage 2 ceiling to **$1.03**; the stage resumed
+and completed at **$1.023421** actual list-price spend. The ledger total now stands at
 **$1.193088**. Chosen efforts: Haiku shared = **`low`**; Sonnet = **`api_default`**.
-No Stage 3 work has run; the Stage 3 dev-sample proposal is pending approval.
+No Stage 3 work has run; the Stage 3 dev-sample proposal is pending my approval.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

@@ -33,11 +33,11 @@ rows.
 PINNED_REVISION=26d14ebfe18b1f7b524bd39b404b50af5dc97866
 ```
 
-## License / republication verdict (drafted 2026-10-26; pending owner sign-off)
+## License / republication verdict (drafted 2026-10-26; pending my sign-off)
 
-**Status: DRAFT — not a verdict.** Owner decision (2026-10-26): the
-**publication rule is approved; the license verdict is not**. Until the owner
-confirms the verdict, do **not** publish raw dataset rows, queries, gold
+**Status: DRAFT — not a verdict.** I decided on 2026-10-26: the
+**publication rule is approved; the license verdict is not**. Until I
+confirm the verdict, do **not** publish raw dataset rows, queries, gold
 answers, full tool schemas, or traces that reproduce them. The draft below
 stays a draft.
 
@@ -52,8 +52,8 @@ support of an academic paper" and points to Salesforce's AUP and AI AUP.
 adaptation (including commercial use) with attribution, a license link, and an
 indication of changes. The gating/citation language is compatible with
 attribution but may add conditions. The "research purposes only" sentence
-reads as a use limitation and is in tension with CC-BY-4.0; the owner's
-accepted terms must resolve that before any redistribution.
+reads as a use limitation and is in tension with CC-BY-4.0; the terms I
+accepted must resolve that before any redistribution.
 
 **May be published now (no raw dataset content):** aggregates, counts, tool
 names, revision hashes, filter definitions, and hand-written tasks.
@@ -62,15 +62,15 @@ names, revision hashes, filter definitions, and hand-written tasks.
 model traces that reproduce them. A trace containing a query, an answer, or a
 full schema is treated as dataset content for licensing purposes.
 
-**After owner confirmation**, a sampled trace may be published only with:
+**After I confirm**, a sampled trace may be published only with:
 attribution to Salesforce/APIGen plus the citation, a CC-BY-4.0 license link, a
 "changes made" note, and compliance with any additional click-through terms.
 If the accepted terms impose research-only or no-redistribution conditions,
 publish links and aggregates only.
 
-**Needs owner confirmation (cannot be verified from the public card):**
+**Needs my confirmation (cannot be verified from the public card):**
 
-- [ ] The exact click-through text accepted in the owner's HF account.
+- [ ] The exact click-through text I accepted in my HF account.
 - [ ] Whether the "research purposes only" sentence is a binding use
       restriction or an ethical recommendation.
 - [ ] Whether Salesforce's AUP/AI AUP adds terms beyond CC-BY-4.0.
@@ -79,14 +79,14 @@ publish links and aggregates only.
 - [ ] Whether model traces count as derivatives or redistribution.
 - [ ] Whether the APIGen citation belongs in the README, this file, or both.
 
-**Card/data discrepancy and interim filter (owner decision, 2026-10-26).**
+**Card/data discrepancy and interim filter (my decision, 2026-10-26).**
 The public card describes a `required` boolean on each parameter, but the
 pinned revision's 362,482 parameter descriptors contain only `type`,
 `description`, and (optionally) `default`: **zero** have a `required` key. The
 Phase-0 required-argument filter therefore treats a parameter without a
 `default` as required — but that is an **interim assumption/heuristic, not the
 dataset's rule**. The final rule is pending the audit in
-`docs/REQUIRED_FILTER_AUDIT.md` and owner sign-off before pre-registration.
+`docs/REQUIRED_FILTER_AUDIT.md` and my sign-off before pre-registration.
 The discrepancy stays in the record either way.
 
 ## Splits
