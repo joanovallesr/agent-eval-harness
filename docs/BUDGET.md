@@ -18,7 +18,7 @@ use list-price token costs; actual spend is reported separately.
 | Line | Ceiling | Actual | Notes |
 |---|---|---|---|
 | phase2_mini_smoke (20 cases × 3 arms) | $1.00 | $0.073719 | list_sync; mini/smoke only; excluded from headline results |
-| pilot (~30 cases/arm, k=1) | $1.00 | — | pure measurement |
+| phase3_pilot (30 cases × 3 arms, k=1) | $1.00 | $0.095948 | list_sync; pilot only; excluded from headline results; 30 non-candidate tools |
 | effort_slices | — | — | set from pilot |
 | dev_spend | — | — | set from pilot |
 | judge_spend (GPT-6 Luna) | — | — | labels + calibration |
@@ -29,8 +29,9 @@ use list-price token costs; actual spend is reported separately.
 | **test_spend** | — | — | `C · n_t · k · measured_cost/case` |
 
 Phase 3 offline tooling (Task 0 resume fix + Task A sampling/analysis/effort
-plumbing) completed with **$0.000000** model spend. No Phase-3 live stage has
-run; the ledger total stands at **$0.073719**.
+plumbing) completed with **$0.000000** model spend. The Stage 1 pilot then
+completed under its **$1.00** ceiling with **$0.095948** actual list-price
+spend. The ledger total now stands at **$0.169667**. Stage 2 has not run.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

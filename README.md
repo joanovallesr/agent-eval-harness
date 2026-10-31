@@ -22,7 +22,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 3 offline plumbing ready
+## Status: Phase 3 Stage 1 pilot complete; awaiting Stage 2
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -33,9 +33,11 @@ are verified/pinned in `src/eval/config.py` and list prices are pinned in
 
 Phase 3's offline half is implemented: deterministic pilot/dev sampling over
 the pinned revision, aborted-case resume semantics, paired analysis with
-variance components and §7 sizing, and effort plumbing. **No Phase-3 live
-stage has run yet**; the pilot waits for an explicit go, and no
-`docs/PRE_REGISTRATION.md` exists.
+variance components and §7 sizing, and effort plumbing. The Stage 1 pilot ran
+on 30 shared non-candidate-tool cases at k=1 for **$0.095948** total; those
+numbers are `pilot` only and excluded from headline results. The aggregate
+pilot list-price cost ratio was **0.0532**, clearing the pre-set 0.10 gate.
+Stage 2 effort slices have not run, and no `docs/PRE_REGISTRATION.md` exists.
 
 ## Layout
 
