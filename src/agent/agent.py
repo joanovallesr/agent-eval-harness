@@ -33,6 +33,8 @@ from eval.config import (
     MATCH_SPEC_VERSION,
     PROMPT_VERSION,
     effort_for,
+    effort_is_transmitted,
+    effort_request_params,
     model_id_for,
 )
 from eval.metrics import (
@@ -343,9 +345,15 @@ class Agent:
         self.max_schema_repair_retries = max_schema_repair_retries
         self.max_infrastructure_retries = max_infrastructure_retries
         self._sleep = sleep or time.sleep
-        # One place for an owner-pinned API parameter. No effort parameter is
-        # invented or transmitted in Phase 2.
-        self.request_params = dict(request_params or {})
+        # One place for an owner-pinned API parameter. A concrete effort is
+        # transmitted only through the SDK's ``output_config.effort`` field.
+        if request_params is None:
+            self.request_params = effort_request_params(self.effort)
+        else:
+            self.request_params = dict(request_params)
+        self.effort_transmitted = effort_is_transmitted(self.effort) and bool(
+            self.request_params.get("output_config", {}).get("effort")
+        )
         self._tools_by_name = {str(tool["name"]): tool for tool in tools}
 
     @property
@@ -367,15 +375,30 @@ class Agent:
         names = task.get("tools") or list(self._tools_by_name)
         if not isinstance(names, (list, tuple)) or not names:
             raise ValueError("task['tools'] must be a non-empty list of tool names")
+
+        # xLAM cases carry their own tool definitions; the mini-set uses the
+        # global in-repo schemas.
+        local_definitions = task.get("tool_definitions")
+        local_by_name: dict[str, Mapping[str, Any]] = {}
+        if local_definitions is not None:
+            if not isinstance(local_definitions, (list, tuple)):
+                raise ValueError("task['tool_definitions'] must be a list")
+            for tool in local_definitions:
+                if not isinstance(tool, Mapping) or not isinstance(
+                    tool.get("name"), str
+                ):
+                    raise ValueError("tool definition must carry a string name")
+                local_by_name[str(tool["name"])] = tool
+
         schemas: list[dict[str, Any]] = []
         for name in names:
-            if name not in self._tools_by_name:
+            tool = local_by_name.get(name) or self._tools_by_name.get(name)
+            if tool is None:
                 raise ValueError(f"task offers unknown tool {name!r}")
-            tool = self._tools_by_name[name]
             schemas.append(
                 {
                     "name": tool["name"],
-                    "description": tool["description"],
+                    "description": tool.get("description", ""),
                     "input_schema": tool["input_schema"],
                 }
             )
@@ -521,6 +544,7 @@ class Agent:
             model_id=self.model,
             effort=self.effort,
             effort_provisional=self.effort_provisional,
+            effort_transmitted=self.effort_transmitted,
             prompt_version=self.prompt_version,
             offered_tools=[schema["name"] for schema in schemas],
         )
@@ -661,11 +685,12 @@ def build_agent(
 
     from agent.tools import tool_schemas
 
+    effort = kwargs.pop("effort", effort_for(arm))
     return Agent(
         model=model_id_for(arm),
         tools=tool_schemas(),
         arm=arm,
-        effort=effort_for(arm),
+        effort=effort,
         client=client,
         price=price,
         **kwargs,

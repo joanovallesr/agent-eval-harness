@@ -16,6 +16,10 @@ results/
 state/
 data/*.jsonl
 data/*.json
+data/**/*.jsonl
+data/**/*.json
+# Phase-3 sampled splits and their metadata stay local.
+data/phase3/
 !data/README.md
 !data/miniset.jsonl
 baselines/*.json

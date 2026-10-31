@@ -60,6 +60,10 @@ class MiniCase:
     split: str = "mini"
     label: str = "smoke"
     notes: str = ""
+    # xLAM cases carry their own Anthropic tool definitions. The hand-written
+    # mini-set leaves this empty and resolves names against ``agent.tools``.
+    tool_definitions: tuple[dict[str, Any], ...] = ()
+    tool_name: str = ""
 
     def to_task(self) -> dict[str, Any]:
         """Return the model-facing task.
@@ -68,7 +72,7 @@ class MiniCase:
         see them, and nothing in the loop needs them for repair decisions.
         """
 
-        return {
+        task: dict[str, Any] = {
             "id": self.id,
             "query": self.query,
             "tools": list(self.tools),
@@ -76,6 +80,11 @@ class MiniCase:
             "label": self.label,
             "notes": self.notes,
         }
+        if self.tool_definitions:
+            task["tool_definitions"] = [
+                dict(definition) for definition in self.tool_definitions
+            ]
+        return task
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -108,12 +117,25 @@ def load_cases(path: Path | str = MINI_SET_PATH) -> list[MiniCase]:
             raise MiniSetError(f"row {index}: missing non-empty string 'id'")
         if not isinstance(query, str) or not query.strip():
             raise MiniSetError(f"{task_id}: missing non-empty string 'query'")
-        if (
-            not isinstance(tools, list)
-            or not tools
-            or not all(isinstance(name, str) and name for name in tools)
-        ):
-            raise MiniSetError(f"{task_id}: 'tools' must be a non-empty list of names")
+        if not isinstance(tools, list) or not tools:
+            raise MiniSetError(f"{task_id}: 'tools' must be a non-empty list")
+
+        tool_definitions: tuple[dict[str, Any], ...] = ()
+        if all(isinstance(name, str) and name for name in tools):
+            names = tuple(tools)
+        elif all(isinstance(tool, dict) for tool in tools):
+            tool_definitions = tuple(dict(tool) for tool in tools)
+            raw_names = [tool.get("name") for tool in tool_definitions]
+            if not all(isinstance(name, str) and name for name in raw_names):
+                raise MiniSetError(
+                    f"{task_id}: every tool definition needs a non-empty name"
+                )
+            names = tuple(str(name) for name in raw_names)
+        else:
+            raise MiniSetError(
+                f"{task_id}: 'tools' must be tool names or tool definition objects"
+            )
+
         if isinstance(answers, str):
             answers_text = answers
         elif isinstance(answers, list):
@@ -124,11 +146,13 @@ def load_cases(path: Path | str = MINI_SET_PATH) -> list[MiniCase]:
             MiniCase(
                 id=task_id,
                 query=query,
-                tools=tuple(tools),
+                tools=names,
                 answers=answers_text,
                 split=str(row.get("split", "mini")),
                 label=str(row.get("label", "smoke")),
                 notes=str(row.get("notes", "")),
+                tool_definitions=tool_definitions,
+                tool_name=str(row.get("tool_name", "")),
             )
         )
     return cases
@@ -146,29 +170,47 @@ def _gold_blocks(gold: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _schema_for(case: MiniCase, name: str) -> dict[str, Any]:
+    if case.tool_definitions:
+        for tool in case.tool_definitions:
+            if tool.get("name") == name:
+                schema = tool.get("input_schema")
+                if not isinstance(schema, dict):
+                    raise MiniSetError(
+                        f"{case.id}: tool {name!r} has no input_schema object"
+                    )
+                return schema
+    return TOOLS_BY_NAME[name]["input_schema"]
+
+
 def validate_case(case: MiniCase) -> None:
     """Raise :class:`MiniSetError` if one case is not pipeline-consistent."""
 
-    if case.split != "mini":
-        raise MiniSetError(f"{case.id}: split must be 'mini', got {case.split!r}")
-    if case.label != "smoke":
-        raise MiniSetError(f"{case.id}: label must be 'smoke', got {case.label!r}")
+    if not case.tool_definitions:
+        if case.split != "mini":
+            raise MiniSetError(f"{case.id}: split must be 'mini', got {case.split!r}")
+        if case.label != "smoke":
+            raise MiniSetError(f"{case.id}: label must be 'smoke', got {case.label!r}")
     if len(set(case.tools)) != len(case.tools):
         raise MiniSetError(f"{case.id}: duplicate names in offered tools")
 
     held_out = CANDIDATE_TOOLS.intersection(case.tools)
-    if held_out:
-        # Stricter than the dev distractor policy on purpose: the user's
-        # Phase-2 mini-set instruction says no candidate held-out tool at all,
-        # as gold or as a distractor.
+    if held_out and not case.tool_definitions:
+        # The Phase-2 mini-set is stricter than the dev distractor policy: it
+        # forbids candidate tools entirely. Phase-3 xLAM cases allow a
+        # candidate only as a distractor; a candidate gold answer is always a
+        # leak.
         raise MiniSetError(
             f"{case.id}: uses frozen held-out candidate tool(s): "
             f"{', '.join(sorted(held_out))}"
         )
 
-    unknown = [name for name in case.tools if name not in TOOLS_BY_NAME]
-    if unknown:
-        raise MiniSetError(f"{case.id}: unknown offered tool(s): {', '.join(unknown)}")
+    if not case.tool_definitions:
+        unknown = [name for name in case.tools if name not in TOOLS_BY_NAME]
+        if unknown:
+            raise MiniSetError(
+                f"{case.id}: unknown offered tool(s): {', '.join(unknown)}"
+            )
 
     try:
         gold = parse_gold(case.answers)
@@ -178,12 +220,20 @@ def validate_case(case: MiniCase) -> None:
     if not gold:
         raise MiniSetError(f"{case.id}: gold call list is empty")
 
+    gold_names = {call.name for call in gold}
+    leaked = CANDIDATE_TOOLS.intersection(gold_names)
+    if leaked:
+        raise MiniSetError(
+            f"{case.id}: gold answers name frozen held-out candidate tool(s): "
+            f"{', '.join(sorted(leaked))}"
+        )
+
     for call in gold:
         if call.name not in case.tools:
             raise MiniSetError(
                 f"{case.id}: gold call names {call.name!r}, which is not offered"
             )
-        schema = TOOLS_BY_NAME[call.name]["input_schema"]
+        schema = _schema_for(case, call.name)
         validator = Draft202012Validator(schema)
         errors = sorted(validator.iter_errors(call.arguments), key=lambda e: list(e.path))
         if errors:

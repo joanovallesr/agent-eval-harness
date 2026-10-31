@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import json
 import math
+import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
+
+from scipy.stats import chi2, t as student_t
 
 
 class PricingError(ValueError):
@@ -392,3 +395,772 @@ def percentile(values: Iterable[float], q: float) -> float:
 def latency_stats(values: Iterable[float]) -> dict[str, float]:
     items = list(values)
     return {"p50": percentile(items, 0.50), "p95": percentile(items, 0.95)}
+
+
+# ---------------------------------------------------------------------------
+# Phase-3 paired analysis (EVAL_DESIGN §1 and §7).
+#
+# Primary estimator: equal-weighted mean over held-out tools of per-tool mean
+# paired differences, with a t-interval on the per-tool means. Repeats are
+# averaged within a case first. The case-level bootstrap is a sensitivity
+# check only.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TInterval:
+    mean: float
+    low: float
+    high: float
+    n: int
+    sd: float
+    se: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def t_interval(values: Sequence[float], confidence: float = 0.95) -> TInterval:
+    """Two-sided Student-t interval for the mean of ``values``."""
+
+    items = [float(value) for value in values]
+    n = len(items)
+    if n == 0:
+        raise ValueError("t_interval needs at least one value")
+    mean = sum(items) / n
+    if n == 1:
+        return TInterval(mean=mean, low=mean, high=mean, n=1, sd=0.0, se=0.0)
+    variance = sum((value - mean) ** 2 for value in items) / (n - 1)
+    sd = math.sqrt(variance)
+    se = sd / math.sqrt(n)
+    alpha = 1.0 - confidence
+    critical = float(student_t.ppf(1.0 - alpha / 2.0, n - 1))
+    half = critical * se
+    return TInterval(
+        mean=mean,
+        low=mean - half,
+        high=mean + half,
+        n=n,
+        sd=sd,
+        se=se,
+    )
+
+
+def sample_variance(values: Sequence[float]) -> float:
+    items = [float(value) for value in values]
+    if len(items) < 2:
+        return 0.0
+    mean = sum(items) / len(items)
+    return sum((value - mean) ** 2 for value in items) / (len(items) - 1)
+
+
+@dataclass(frozen=True)
+class CasePair:
+    task_id: str
+    tool: str
+    agent_exact: float
+    baseline_exact: float
+    agent_cost: float
+    baseline_cost: float
+    agent_input_tokens: float
+    agent_output_tokens: float
+    baseline_input_tokens: float
+    baseline_output_tokens: float
+    agent_thinking_tokens: float = 0.0
+    baseline_thinking_tokens: float = 0.0
+
+    @property
+    def difference(self) -> float:
+        return self.agent_exact - self.baseline_exact
+
+    @property
+    def discordant(self) -> bool:
+        return self.agent_exact != self.baseline_exact
+
+    @property
+    def log_cost_ratio(self) -> float | None:
+        if self.agent_cost <= 0 or self.baseline_cost <= 0:
+            return None
+        return math.log(self.agent_cost / self.baseline_cost)
+
+
+def _usable_records(records: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    return [
+        record
+        for record in records
+        if str(record.get("status", "completed")) == "completed"
+    ]
+
+
+def _case_means(
+    records: Sequence[Mapping[str, Any]],
+    key: str,
+) -> dict[str, float]:
+    grouped: dict[str, list[float]] = {}
+    for record in _usable_records(records):
+        grouped.setdefault(str(record["task_id"]), []).append(
+            float(record.get(key, 0.0) or 0.0)
+        )
+    return {
+        task_id: sum(values) / len(values)
+        for task_id, values in grouped.items()
+        if values
+    }
+
+
+def _case_repeat_counts(
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in _usable_records(records):
+        task_id = str(record["task_id"])
+        counts[task_id] = counts.get(task_id, 0) + 1
+    return counts
+
+
+def _thinking_tokens(record: Mapping[str, Any]) -> float:
+    raw = record.get("raw_usage") or {}
+    if not isinstance(raw, Mapping):
+        return 0.0
+    details = raw.get("output_tokens_details")
+    if isinstance(details, Mapping):
+        value = details.get("thinking_tokens")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    value = raw.get("thinking_tokens")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return 0.0
+
+
+def build_case_pairs(
+    agent_records: Sequence[Mapping[str, Any]],
+    baseline_records: Sequence[Mapping[str, Any]],
+    *,
+    tool_by_case: Mapping[str, str] | None = None,
+) -> list[CasePair]:
+    """Pair two arms case-by-case, averaging repeats within a case first."""
+
+    agent_exact = _case_means(agent_records, "exact")
+    baseline_exact = _case_means(baseline_records, "exact")
+    agent_cost = _case_means(agent_records, "cost_usd")
+    baseline_cost = _case_means(baseline_records, "cost_usd")
+    agent_in = _case_means(agent_records, "input_tokens")
+    agent_out = _case_means(agent_records, "output_tokens")
+    baseline_in = _case_means(baseline_records, "input_tokens")
+    baseline_out = _case_means(baseline_records, "output_tokens")
+
+    agent_thinking: dict[str, list[float]] = {}
+    baseline_thinking: dict[str, list[float]] = {}
+    for record in _usable_records(agent_records):
+        agent_thinking.setdefault(str(record["task_id"]), []).append(
+            _thinking_tokens(record)
+        )
+    for record in _usable_records(baseline_records):
+        baseline_thinking.setdefault(str(record["task_id"]), []).append(
+            _thinking_tokens(record)
+        )
+
+    recorded_tools: dict[str, str] = {}
+    for record in list(agent_records) + list(baseline_records):
+        tool = record.get("tool_name")
+        if isinstance(tool, str) and tool:
+            recorded_tools[str(record["task_id"])] = tool
+    tools = dict(tool_by_case or {})
+    tools.update(recorded_tools)
+
+    common = sorted(set(agent_exact) & set(baseline_exact))
+    missing_agent = sorted(set(baseline_exact) - set(agent_exact))
+    missing_baseline = sorted(set(agent_exact) - set(baseline_exact))
+    if missing_agent or missing_baseline:
+        raise ValueError(
+            "paired design requires the same cases in both arms; "
+            f"missing agent={len(missing_agent)} baseline={len(missing_baseline)}"
+        )
+
+    agent_repeats = _case_repeat_counts(agent_records)
+    baseline_repeats = _case_repeat_counts(baseline_records)
+    mismatched = [
+        task_id
+        for task_id in common
+        if agent_repeats.get(task_id) != baseline_repeats.get(task_id)
+    ]
+    if mismatched:
+        raise ValueError(
+            "paired arms have unequal completed repeat counts for "
+            f"{len(mismatched)} case(s); finish/resume the run before analysis"
+        )
+
+    pairs: list[CasePair] = []
+    for task_id in common:
+        tool = tools.get(task_id, "")
+        if not tool:
+            raise ValueError(f"no tool recorded for case {task_id!r}")
+        a_thinking = agent_thinking.get(task_id, [0.0])
+        b_thinking = baseline_thinking.get(task_id, [0.0])
+        pairs.append(
+            CasePair(
+                task_id=task_id,
+                tool=tool,
+                agent_exact=agent_exact[task_id],
+                baseline_exact=baseline_exact[task_id],
+                agent_cost=agent_cost[task_id],
+                baseline_cost=baseline_cost[task_id],
+                agent_input_tokens=agent_in[task_id],
+                agent_output_tokens=agent_out[task_id],
+                baseline_input_tokens=baseline_in[task_id],
+                baseline_output_tokens=baseline_out[task_id],
+                agent_thinking_tokens=sum(a_thinking) / len(a_thinking),
+                baseline_thinking_tokens=sum(b_thinking) / len(b_thinking),
+            )
+        )
+    return pairs
+
+
+@dataclass(frozen=True)
+class ToolStat:
+    tool: str
+    n: int
+    mean_agent: float
+    mean_baseline: float
+    mean_difference: float
+    sigma2_within: float
+    mean_agent_cost: float
+    mean_baseline_cost: float
+    cost_ratio: float | None
+    log_cost_ratio: float | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def per_tool_stats(pairs: Sequence[CasePair]) -> dict[str, ToolStat]:
+    grouped: dict[str, list[CasePair]] = {}
+    for pair in pairs:
+        grouped.setdefault(pair.tool, []).append(pair)
+    stats: dict[str, ToolStat] = {}
+    for tool in sorted(grouped):
+        rows = grouped[tool]
+        n = len(rows)
+        mean_agent = sum(row.agent_exact for row in rows) / n
+        mean_baseline = sum(row.baseline_exact for row in rows) / n
+        differences = [row.difference for row in rows]
+        mean_agent_cost = sum(row.agent_cost for row in rows) / n
+        mean_baseline_cost = sum(row.baseline_cost for row in rows) / n
+        ratio = (
+            mean_agent_cost / mean_baseline_cost
+            if mean_baseline_cost > 0
+            else None
+        )
+        stats[tool] = ToolStat(
+            tool=tool,
+            n=n,
+            mean_agent=mean_agent,
+            mean_baseline=mean_baseline,
+            mean_difference=sum(differences) / n,
+            sigma2_within=sample_variance(differences),
+            mean_agent_cost=mean_agent_cost,
+            mean_baseline_cost=mean_baseline_cost,
+            cost_ratio=ratio,
+            log_cost_ratio=math.log(ratio) if ratio and ratio > 0 else None,
+        )
+    return stats
+
+
+def discordant_rate(pairs: Sequence[CasePair]) -> float:
+    if not pairs:
+        return 0.0
+    return sum(1 for pair in pairs if pair.discordant) / len(pairs)
+
+
+def primary_interval(pairs: Sequence[CasePair]) -> TInterval:
+    stats = per_tool_stats(pairs)
+    return t_interval([stat.mean_difference for stat in stats.values()])
+
+
+def cost_ratio_interval(pairs: Sequence[CasePair]) -> dict[str, Any]:
+    stats = per_tool_stats(pairs)
+    logs = [
+        stat.log_cost_ratio
+        for stat in stats.values()
+        if stat.log_cost_ratio is not None
+    ]
+    if not logs:
+        raise ValueError("no positive per-tool cost ratios")
+    interval = t_interval(logs)
+    return {
+        "ratio": math.exp(interval.mean),
+        "low": math.exp(interval.low),
+        "high": math.exp(interval.high),
+        "n_tools": interval.n,
+        "mean_log_ratio": interval.mean,
+        "sd_log_ratio": interval.sd,
+    }
+
+
+def aggregate_cost_ratio(pairs: Sequence[CasePair]) -> float:
+    agent_total = sum(pair.agent_cost for pair in pairs)
+    baseline_total = sum(pair.baseline_cost for pair in pairs)
+    if baseline_total <= 0:
+        raise ValueError("baseline cost is zero")
+    return agent_total / baseline_total
+
+
+def pessimistic_u(m: int) -> float:
+    """EVAL_DESIGN §7: u = sqrt((m-1) / chi2_{0.20, m-1})."""
+
+    if m <= 1:
+        raise ValueError(f"u needs m >= 2, got {m}")
+    return math.sqrt((m - 1) / float(chi2.ppf(0.20, m - 1)))
+
+
+def m_from_tool_counts(
+    counts: Mapping[str, int] | Sequence[int],
+    threshold: int = 10,
+) -> int:
+    values = counts.values() if isinstance(counts, Mapping) else counts
+    return sum(1 for count in values if int(count) >= threshold)
+
+
+def power_multiplier(C: int) -> float:
+    """(t(0.975,C-1) + t(0.80,C-1)) / sqrt(C) from §7."""
+
+    if C < 2:
+        raise ValueError("C must be >= 2")
+    return float(
+        student_t.ppf(0.975, C - 1) + student_t.ppf(0.80, C - 1)
+    ) / math.sqrt(C)
+
+
+def power_passes(
+    s_pess: float,
+    C: int,
+    *,
+    delta: float = 0.05,
+    assumed_gap: float = 0.0,
+) -> bool:
+    """§7: (t_.975 + t_.80) * s_tool / sqrt(C) < delta + Delta."""
+
+    return power_multiplier(C) * s_pess < delta + assumed_gap
+
+
+def required_n_t(
+    sigma2_within: float | Sequence[float],
+    tau2: float,
+    *,
+    floor: int = 100,
+) -> int:
+    """One n_t for every tool: max over per-tool 4*sigma2_within/tau2.
+
+    Passing a sequence uses the maximum per-tool requirement, as §7 requires;
+    a scalar is the single-pooled-variance shorthand.
+    """
+
+    if tau2 <= 0:
+        return floor
+    if isinstance(sigma2_within, (int, float)):
+        values = [float(sigma2_within)]
+    else:
+        values = [float(value) for value in sigma2_within]
+    if not values:
+        return floor
+    return max(
+        floor,
+        max(int(math.ceil(4.0 * value / tau2)) for value in values),
+    )
+
+
+def s_pess_from_components(
+    tau2: float,
+    sigma2_within: float,
+    n_t: int,
+    u: float,
+) -> float:
+    """s_pess = sqrt((u*tau)^2 + sigma2_within/n_t)."""
+
+    if n_t <= 0:
+        raise ValueError("n_t must be positive")
+    return math.sqrt((u * u * tau2) + sigma2_within / n_t)
+
+
+def select_c(
+    s_pess: float,
+    *,
+    delta: float = 0.05,
+    assumed_gap: float = 0.0,
+    budget_ok: Mapping[int, bool] | None = None,
+) -> int | None:
+    """Smallest C in {6,7,8} that passes power (and the budget, if supplied)."""
+
+    for C in (6, 7, 8):
+        if budget_ok is not None and not budget_ok.get(C, False):
+            continue
+        if power_passes(
+            s_pess,
+            C,
+            delta=delta,
+            assumed_gap=assumed_gap,
+        ):
+            return C
+    return None
+
+
+def _dev_stats(
+    pairs: Sequence[CasePair],
+    excluded_tools: Iterable[str] | None = None,
+) -> list[ToolStat]:
+    stats = per_tool_stats(pairs)
+    excluded = set(excluded_tools or ())
+    return [stat for tool, stat in stats.items() if tool not in excluded]
+
+
+def variance_components(
+    pairs: Sequence[CasePair],
+    *,
+    excluded_tools: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Separate within-tool noise from between-tool variance (§7)."""
+
+    tool_stats = _dev_stats(pairs, excluded_tools)
+    if len(tool_stats) < 2:
+        raise ValueError("variance components need at least two tools")
+    differences = [stat.mean_difference for stat in tool_stats]
+    observed_var = sample_variance(differences)
+    within_noise = sum(
+        stat.sigma2_within / stat.n for stat in tool_stats
+    ) / len(tool_stats)
+    tau2 = max(0.0, observed_var - within_noise)
+    degrees = sum(stat.n - 1 for stat in tool_stats)
+    pooled_within = (
+        sum((stat.n - 1) * stat.sigma2_within for stat in tool_stats) / degrees
+        if degrees > 0
+        else 0.0
+    )
+    m = m_from_tool_counts({stat.tool: stat.n for stat in tool_stats})
+    u = pessimistic_u(m) if m >= 2 else None
+    return {
+        "observed_loto_var": observed_var,
+        "observed_loto_sd": math.sqrt(observed_var),
+        "mean_within_noise": within_noise,
+        "tau2": tau2,
+        "tau": math.sqrt(tau2),
+        "sigma2_within": pooled_within,
+        "sigma_within": math.sqrt(pooled_within),
+        "m": m,
+        "u": u,
+        "n_tools": len(tool_stats),
+    }
+
+
+def loto_components(
+    pairs: Sequence[CasePair],
+    *,
+    excluded_tools: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Leave-one-tool-out spread and pessimistic sizing inputs."""
+
+    tool_stats = _dev_stats(pairs, excluded_tools)
+    stats = {stat.tool: stat for stat in tool_stats}
+    tools = list(stats)
+    if len(tools) < 3:
+        raise ValueError("leave-one-tool-out needs at least three tools")
+    sd_by_left_out: dict[str, float] = {}
+    tau2_by_left_out: dict[str, float] = {}
+    for left_out in tools:
+        remaining = [stats[tool] for tool in tools if tool != left_out]
+        differences = [stat.mean_difference for stat in remaining]
+        observed = sample_variance(differences)
+        noise = sum(
+            stat.sigma2_within / stat.n for stat in remaining
+        ) / len(remaining)
+        tau2 = max(0.0, observed - noise)
+        sd_by_left_out[left_out] = math.sqrt(observed)
+        tau2_by_left_out[left_out] = tau2
+    spreads = list(sd_by_left_out.values())
+    return {
+        "per_left_out": {
+            tool: {
+                "loto_sd": sd_by_left_out[tool],
+                "tau2": tau2_by_left_out[tool],
+            }
+            for tool in tools
+        },
+        "loto_sd_min": min(spreads),
+        "loto_sd_median": sorted(spreads)[len(spreads) // 2],
+        "loto_sd_max": max(spreads),
+        "tau2_max": max(tau2_by_left_out.values()),
+    }
+
+
+def bootstrap_mean_ci(
+    values: Sequence[float],
+    *,
+    resamples: int = 2000,
+    seed: int = 42,
+    confidence: float = 0.95,
+) -> dict[str, float | int]:
+    """Deterministic percentile bootstrap for a mean (sensitivity only)."""
+
+    items = [float(value) for value in values]
+    if not items:
+        raise ValueError("bootstrap needs at least one value")
+    rng = random.Random(seed)
+    means: list[float] = []
+    for _ in range(resamples):
+        sample = [items[rng.randrange(len(items))] for _ in items]
+        means.append(sum(sample) / len(sample))
+    means.sort()
+    alpha = (1.0 - confidence) / 2.0
+    low = percentile(means, alpha)
+    high = percentile(means, 1.0 - alpha)
+    return {
+        "mean": sum(items) / len(items),
+        "low": low,
+        "high": high,
+        "resamples": resamples,
+        "seed": seed,
+    }
+
+
+def bootstrap_primary_ci(
+    pairs: Sequence[CasePair],
+    *,
+    resamples: int = 2000,
+    seed: int = 42,
+) -> dict[str, float | int]:
+    return bootstrap_mean_ci(
+        [pair.difference for pair in pairs],
+        resamples=resamples,
+        seed=seed,
+    )
+
+
+def bootstrap_cost_ratio_ci(
+    pairs: Sequence[CasePair],
+    *,
+    resamples: int = 2000,
+    seed: int = 42,
+) -> dict[str, float | int]:
+    """Case-level bootstrap of the pooled cost ratio (sensitivity only)."""
+
+    if not pairs:
+        raise ValueError("bootstrap needs at least one pair")
+    rng = random.Random(seed)
+    ratios: list[float] = []
+    for _ in range(resamples):
+        sample = [pairs[rng.randrange(len(pairs))] for _ in pairs]
+        agent_total = sum(pair.agent_cost for pair in sample)
+        baseline_total = sum(pair.baseline_cost for pair in sample)
+        if baseline_total > 0:
+            ratios.append(agent_total / baseline_total)
+    ratios.sort()
+    if not ratios:
+        raise ValueError("no positive baseline cost in bootstrap samples")
+    low = percentile(ratios, 0.025)
+    high = percentile(ratios, 0.975)
+    return {
+        "ratio": aggregate_cost_ratio(pairs),
+        "low": low,
+        "high": high,
+        "resamples": resamples,
+        "seed": seed,
+    }
+
+
+def sizing_report(
+    pairs: Sequence[CasePair],
+    *,
+    delta: float = 0.05,
+    assumed_gap: float = 0.0,
+    n_t_floor: int = 100,
+    budget_ok: Mapping[int, bool] | None = None,
+    excluded_tools: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Recompute m, u, s_pess, the power inequality, and the C proposal.
+
+    §7 says to size to the pessimistic end of the leave-one-tool-out spread.
+    The headline ``s_pess`` therefore uses the larger of the full-sample and
+    LOTO-maximum between-tool variance. The full-sample figures are retained
+    as a sensitivity comparison.
+    """
+
+    components = variance_components(pairs, excluded_tools=excluded_tools)
+    u = components["u"]
+    if u is None:
+        raise ValueError("sizing needs at least two dev tools with >=10 cases")
+    stats = _dev_stats(pairs, excluded_tools)
+    per_tool_sigma2 = [stat.sigma2_within for stat in stats]
+    sigma2_within = float(components["sigma2_within"])
+    loto = loto_components(pairs, excluded_tools=excluded_tools)
+    pessimistic_tau2 = max(float(components["tau2"]), float(loto["tau2_max"]))
+    n_t = required_n_t(per_tool_sigma2, pessimistic_tau2, floor=n_t_floor)
+    s_pess = s_pess_from_components(
+        pessimistic_tau2,
+        sigma2_within,
+        n_t,
+        u,
+    )
+    full_n_t = required_n_t(
+        per_tool_sigma2,
+        float(components["tau2"]),
+        floor=n_t_floor,
+    )
+    full_s_pess = s_pess_from_components(
+        float(components["tau2"]),
+        sigma2_within,
+        full_n_t,
+        u,
+    )
+    power = {
+        str(C): {
+            "multiplier": power_multiplier(C),
+            "passes": power_passes(
+                s_pess,
+                C,
+                delta=delta,
+                assumed_gap=assumed_gap,
+            ),
+            "max_s_pess": (delta + assumed_gap) / power_multiplier(C),
+        }
+        for C in (6, 7, 8)
+    }
+    return {
+        "delta": delta,
+        "assumed_gap": assumed_gap,
+        "n_t_floor": n_t_floor,
+        "components": components,
+        "loto": loto,
+        "pessimistic_tau2": pessimistic_tau2,
+        "n_t": n_t,
+        "s_pess": s_pess,
+        "full_sample_n_t": full_n_t,
+        "full_sample_s_pess": full_s_pess,
+        "power": power,
+        "proposed_C": select_c(
+            s_pess,
+            delta=delta,
+            assumed_gap=assumed_gap,
+            budget_ok=budget_ok,
+        ),
+        "proposed_C_full_sample": select_c(
+            full_s_pess,
+            delta=delta,
+            assumed_gap=assumed_gap,
+            budget_ok=budget_ok,
+        ),
+    }
+
+
+def analyse_paired(
+    agent_records: Sequence[Mapping[str, Any]],
+    baseline_records: Sequence[Mapping[str, Any]],
+    *,
+    tool_by_case: Mapping[str, str] | None = None,
+    label: str = "",
+    resamples: int = 2000,
+    seed: int = 42,
+    delta: float = 0.05,
+    assumed_gap: float = 0.0,
+    budget_ok: Mapping[int, bool] | None = None,
+    excluded_tools: Iterable[str] | None = None,
+    include_sizing: bool = True,
+) -> dict[str, Any]:
+    """Full paired report for one comparison (primary or secondary)."""
+
+    pairs = build_case_pairs(
+        agent_records,
+        baseline_records,
+        tool_by_case=tool_by_case,
+    )
+    stats = per_tool_stats(pairs)
+    interval = primary_interval(pairs)
+    cost = cost_ratio_interval(pairs)
+    metrics = {
+        "label": label,
+        "n_cases": len(pairs),
+        "n_tools": len(stats),
+        "discordant_rate": discordant_rate(pairs),
+        "aggregate_cost_ratio": aggregate_cost_ratio(pairs),
+        "cost_per_case": {
+            "agent": sum(pair.agent_cost for pair in pairs) / len(pairs),
+            "baseline": sum(pair.baseline_cost for pair in pairs) / len(pairs),
+        },
+        "tokens_per_case": {
+            "agent_input": sum(pair.agent_input_tokens for pair in pairs) / len(pairs),
+            "agent_output": sum(pair.agent_output_tokens for pair in pairs) / len(pairs),
+            "baseline_input": sum(
+                pair.baseline_input_tokens for pair in pairs
+            ) / len(pairs),
+            "baseline_output": sum(
+                pair.baseline_output_tokens for pair in pairs
+            ) / len(pairs),
+            "agent_thinking": sum(
+                pair.agent_thinking_tokens for pair in pairs
+            ) / len(pairs),
+            "baseline_thinking": sum(
+                pair.baseline_thinking_tokens for pair in pairs
+            ) / len(pairs),
+        },
+        "primary": interval.to_dict(),
+        "primary_bootstrap": bootstrap_primary_ci(
+            pairs, resamples=resamples, seed=seed
+        ),
+        "cost_ratio": cost,
+        "cost_ratio_bootstrap": bootstrap_cost_ratio_ci(
+            pairs, resamples=resamples, seed=seed
+        ),
+        "per_tool": {
+            tool: stat.to_dict() for tool, stat in stats.items()
+        },
+    }
+    if include_sizing:
+        try:
+            metrics["sizing"] = sizing_report(
+                pairs,
+                delta=delta,
+                assumed_gap=assumed_gap,
+                budget_ok=budget_ok,
+                excluded_tools=excluded_tools,
+            )
+        except ValueError as exc:
+            metrics["sizing"] = {"error": str(exc)}
+    return metrics
+
+
+def pilot_cost_gate(
+    ratio: float,
+    *,
+    threshold: float = 0.10,
+) -> dict[str, Any]:
+    """Aggregate pilot cost-ratio gate from PROJECT_PLAN Phase 3."""
+
+    return {
+        "ratio": ratio,
+        "threshold": threshold,
+        "passes": ratio <= threshold,
+        "definition": (
+            "aggregate pilot list-price cost per case for haiku-agent divided "
+            "by sonnet-direct; <= 0.10 clears the gate"
+        ),
+    }
+
+
+def failure_mode_counts(
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
+    """Observed diagnostic events, not an exclusion list."""
+
+    counts: dict[str, int] = {}
+    for record in records:
+        for kind in record.get("format_failure_kind") or []:
+            key = str(kind)
+            counts[key] = counts.get(key, 0) + 1
+        reason = record.get("failure_reason")
+        if isinstance(reason, str) and reason:
+            key = f"failure_reason:{reason}"
+            counts[key] = counts.get(key, 0) + 1
+        status = str(record.get("status", "completed"))
+        if status != "completed":
+            key = f"status:{status}"
+            counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))

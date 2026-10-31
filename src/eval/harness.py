@@ -48,8 +48,6 @@ from typing import Any, Mapping, Sequence
 from agent.agent import AgentTrace, build_agent
 from eval.config import (
     ARMS,
-    EFFORT_PROVISIONAL,
-    EFFORT_TRANSMITTED,
     MAX_TOKENS,
     MAX_TOKENS_PROVISIONAL,
     MATCH_SPEC_VERSION,
@@ -59,6 +57,8 @@ from eval.config import (
     MODEL_ID_STATUS,
     PROMPT_VERSION,
     effort_for,
+    effort_is_transmitted,
+    effort_request_params,
     model_id_for,
     pricing_for,
 )
@@ -111,6 +111,8 @@ RESULTS_CONTRACT = {
     "per_case": [
         "run_id",
         "task_id",
+        "tool_name",
+        "status",
         "arm",
         "model_id",
         "effort",
@@ -140,7 +142,9 @@ RESULTS_CONTRACT = {
         "n_cases",
         "n_cases_attempted",
         "n_cases_completed",
+        "n_cases_aborted",
         "n_repeats",
+        "n_records_aborted",
         "exact_match_mean",
         "exact_match_ci_low",
         "exact_match_ci_high",
@@ -155,6 +159,8 @@ RESULTS_CONTRACT = {
         "format_failure_rate",
         "format_failure_breakdown",
         "cost_usd_total",
+        "completed_cost_usd",
+        "aborted_cost_usd",
         "cost_per_task",
         "cost_per_completed_task",
         "latency_p50_s",
@@ -292,10 +298,14 @@ def _per_case_record(
     case: MiniCase,
     repeat: int,
     score: Mapping[str, Any],
+    *,
+    status: str = "completed",
 ) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "task_id": case.id,
+        "tool_name": case.tool_name,
+        "status": status,
         "arm": trace.arm,
         "model_id": trace.model_id,
         "effort": trace.effort,
@@ -338,8 +348,23 @@ def _summary(
     records: Sequence[Mapping[str, Any]],
     *,
     n_cases_attempted: int,
+    label: str = MINI_SET_LABEL,
+    dev_vs_final: str = MINI_SET_DEV_VS_FINAL,
 ) -> dict[str, Any]:
-    grouped = _group_by_case(records)
+    completed_records = [
+        record
+        for record in records
+        if str(record.get("status", "completed")) == "completed"
+    ]
+    aborted_records = [
+        record
+        for record in records
+        if str(record.get("status", "completed")) != "completed"
+    ]
+    # Aggregate metrics use completed results only. An aborted case's 0 is
+    # visible in its own per_case record and aborted-cost accounting, never
+    # mixed into the completed-run accuracy aggregates.
+    grouped = _group_by_case(completed_records)
     per_case_exact = [
         _mean([float(record["exact"]) for record in group])
         for group in grouped.values()
@@ -370,6 +395,8 @@ def _summary(
     ]
 
     n_cases = len(grouped)
+    completed_cases = {str(record["task_id"]) for record in completed_records}
+    aborted_cases = {str(record["task_id"]) for record in aborted_records}
     exact_mean = _mean(per_case_exact)
     ci_low, ci_high = mean_ci(per_case_exact)
     pass_rate = _mean(pass_at_k)
@@ -381,14 +408,18 @@ def _summary(
             breakdown[str(kind)] = breakdown.get(str(kind), 0) + 1
 
     total_cost = sum(float(record["cost_usd"]) for record in records)
-    latencies = [float(record["latency_s"]) for record in records]
+    completed_cost = sum(float(record["cost_usd"]) for record in completed_records)
+    aborted_cost = sum(float(record["cost_usd"]) for record in aborted_records)
+    latencies = [float(record["latency_s"]) for record in completed_records]
     stats = latency_stats(latencies)
 
     return {
         "n_cases": n_cases,
         "n_cases_attempted": n_cases_attempted,
-        "n_cases_completed": n_cases,
-        "n_repeats": len(records),
+        "n_cases_completed": len(completed_cases),
+        "n_cases_aborted": len(aborted_cases),
+        "n_repeats": len(completed_records),
+        "n_records_aborted": len(aborted_records),
         "exact_match_mean": exact_mean,
         "exact_match_ci_low": ci_low,
         "exact_match_ci_high": ci_high,
@@ -399,7 +430,8 @@ def _summary(
         "pass_at_k_ci_high": pass_high,
         "retry_rate": _mean(per_case_retry),
         "mean_retries_per_case": (
-            sum(int(record["retry_count"]) for record in records) / n_cases
+            sum(int(record["retry_count"]) for record in completed_records)
+            / n_cases
             if n_cases
             else 0.0
         ),
@@ -407,13 +439,17 @@ def _summary(
         "format_failure_rate": _mean(per_case_format_failure),
         "format_failure_breakdown": breakdown,
         "cost_usd_total": total_cost,
+        "completed_cost_usd": completed_cost,
+        "aborted_cost_usd": aborted_cost,
         "cost_per_task": total_cost / n_cases if n_cases else 0.0,
-        "cost_per_completed_task": total_cost / n_cases if n_cases else 0.0,
+        "cost_per_completed_task": (
+            completed_cost / n_cases if n_cases else 0.0
+        ),
         "latency_p50_s": stats["p50"],
         "latency_p95_s": stats["p95"],
-        "mini_set_only": True,
-        "label": MINI_SET_LABEL,
-        "dev_vs_final": MINI_SET_DEV_VS_FINAL,
+        "mini_set_only": label == MINI_SET_LABEL,
+        "label": label,
+        "dev_vs_final": dev_vs_final,
     }
 
 
@@ -428,22 +464,27 @@ def _run_block(
     repeats: int,
     cost_ceiling: float,
     subset_path: str,
+    efforts: Mapping[str, str] | None = None,
+    label: str = MINI_SET_LABEL,
+    dev_vs_final: str = MINI_SET_DEV_VS_FINAL,
 ) -> dict[str, Any]:
+    effort = (efforts or {}).get(arm, effort_for(arm))
     return {
         "run_id": run_id,
         "git_commit": git_commit,
         "created_at": created_at,
-        "dev_vs_final": MINI_SET_DEV_VS_FINAL,
-        "label": MINI_SET_LABEL,
+        "dev_vs_final": dev_vs_final,
+        "label": label,
         "run_status": status,
         "abort_reason": abort_reason,
         "arm": arm,
         "model_id": model_id_for(arm),
         "model_ids_verified": MODEL_IDS_VERIFIED,
         "model_id_status": MODEL_ID_STATUS,
-        "effort": effort_for(arm),
-        "effort_provisional": EFFORT_PROVISIONAL,
-        "effort_transmitted": EFFORT_TRANSMITTED,
+        "effort": effort,
+        "effort_provisional": effort == "api_default",
+        "effort_transmitted": effort_is_transmitted(effort),
+        "effort_field": "output_config.effort" if effort_is_transmitted(effort) else None,
         "prompt_version": PROMPT_VERSION,
         "match_spec_version": MATCH_SPEC_VERSION,
         "repeats": repeats,
@@ -464,20 +505,30 @@ def _pricing_rows(prices: Mapping[str, TokenPrice]) -> dict[str, dict[str, Any]]
     }
 
 
-def _arm_config_rows() -> list[dict[str, Any]]:
-    return [
-        {
-            "arm": arm,
-            "model_id": model_id_for(arm),
-            "model_ids_verified": MODEL_IDS_VERIFIED,
-            "model_id_status": MODEL_ID_STATUS,
-            "effort": effort_for(arm),
-            "effort_provisional": EFFORT_PROVISIONAL,
-            "effort_transmitted": EFFORT_TRANSMITTED,
-            "prompt_version": PROMPT_VERSION,
-        }
-        for arm in ARMS
-    ]
+def _arm_config_rows(
+    efforts: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for arm in ARMS:
+        effort = (efforts or {}).get(arm, effort_for(arm))
+        rows.append(
+            {
+                "arm": arm,
+                "model_id": model_id_for(arm),
+                "model_ids_verified": MODEL_IDS_VERIFIED,
+                "model_id_status": MODEL_ID_STATUS,
+                "effort": effort,
+                "effort_provisional": effort == "api_default",
+                "effort_transmitted": effort_is_transmitted(effort),
+                "effort_field": (
+                    "output_config.effort"
+                    if effort_is_transmitted(effort)
+                    else None
+                ),
+                "prompt_version": PROMPT_VERSION,
+            }
+        )
+    return rows
 
 
 def _write_outputs(
@@ -499,6 +550,10 @@ def _write_outputs(
     resume_history: Sequence[Mapping[str, Any]] | None = None,
     selected_arms: Sequence[str] | None = None,
     pricing_path: str | None = None,
+    efforts: Mapping[str, str] | None = None,
+    label: str = MINI_SET_LABEL,
+    dev_vs_final: str = MINI_SET_DEV_VS_FINAL,
+    subset_metadata: Mapping[str, Any] | None = None,
 ) -> None:
     combined_arms: dict[str, Any] = {}
     for arm in ARMS:
@@ -516,6 +571,9 @@ def _write_outputs(
             repeats=repeats,
             cost_ceiling=cost_ceiling,
             subset_path=subset_path,
+            efforts=efforts,
+            label=label,
+            dev_vs_final=dev_vs_final,
         )
         arm_payload = {
             "run": run_block,
@@ -529,14 +587,15 @@ def _write_outputs(
         "run_id": run_id,
         "git_commit": git_commit,
         "created_at": created_at,
-        "dev_vs_final": MINI_SET_DEV_VS_FINAL,
-        "label": MINI_SET_LABEL,
+        "dev_vs_final": dev_vs_final,
+        "label": label,
         "run_status": status,
         "abort_reason": abort_reason,
         "cost_ceiling_usd": cost_ceiling,
         "total_cost_usd": total_cost,
         "repeats": repeats,
         "subset_path": subset_path,
+        "subset_metadata": dict(subset_metadata or {}),
         "match_spec_version": MATCH_SPEC_VERSION,
         "prompt_version": PROMPT_VERSION,
         "pricing_basis": "list_sync",
@@ -544,19 +603,27 @@ def _write_outputs(
         "pricing_per_mtok": dict(pricing_rows or {}),
         "max_tokens": MAX_TOKENS,
         "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
+        "resume_semantics": (
+            "resume from checkpoint allowed; restarting after seeing partial "
+            "results forbidden"
+        ),
         "resume_history": list(resume_history or []),
         "case_ids": [case.id for case in cases],
         "selected_arms": list(selected_arms or []),
-        "arms": _arm_config_rows(),
-        "note": "mini/smoke only; excluded from every headline number",
+        "arms": _arm_config_rows(efforts),
+        "note": (
+            "mini/smoke only; excluded from every headline number"
+            if label == MINI_SET_LABEL
+            else f"{dev_vs_final} only; not a final/held-out result"
+        ),
     }
     _atomic_write_json(run_dir / "run.json", run_payload)
     _atomic_write_json(
         run_dir / "summary.json",
         {
             "run_id": run_id,
-            "label": MINI_SET_LABEL,
-            "dev_vs_final": MINI_SET_DEV_VS_FINAL,
+            "label": label,
+            "dev_vs_final": dev_vs_final,
             "run_status": status,
             "abort_reason": abort_reason,
             "total_cost_usd": total_cost,
@@ -566,7 +633,7 @@ def _write_outputs(
             "max_tokens": MAX_TOKENS,
             "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
             "selected_arms": list(selected_arms or []),
-            "arm_configs": _arm_config_rows(),
+            "arm_configs": _arm_config_rows(efforts),
             "arms": dict(arm_summaries),
         },
     )
@@ -577,8 +644,8 @@ def _write_outputs(
                 "run_id": run_id,
                 "git_commit": git_commit,
                 "created_at": created_at,
-                "dev_vs_final": MINI_SET_DEV_VS_FINAL,
-                "label": MINI_SET_LABEL,
+                "dev_vs_final": dev_vs_final,
+                "label": label,
                 "run_status": status,
                 "abort_reason": abort_reason,
                 "match_spec_version": MATCH_SPEC_VERSION,
@@ -590,9 +657,14 @@ def _write_outputs(
                 "pricing_per_mtok": dict(pricing_rows or {}),
                 "max_tokens": MAX_TOKENS,
                 "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
+                "subset_metadata": dict(subset_metadata or {}),
+                "resume_semantics": (
+                    "resume from checkpoint allowed; restarting after seeing "
+                    "partial results forbidden"
+                ),
                 "resume_history": list(resume_history or []),
                 "selected_arms": list(selected_arms or []),
-                "arms": _arm_config_rows(),
+                "arms": _arm_config_rows(efforts),
             },
             "arms": combined_arms,
         },
@@ -633,8 +705,11 @@ def run_arms(
     run_id: str | None = None,
     resume: bool = True,
     pricing_path: str | None = None,
+    efforts: Mapping[str, str] | None = None,
+    label: str = MINI_SET_LABEL,
+    dev_vs_final: str = MINI_SET_DEV_VS_FINAL,
 ) -> dict[str, Any]:
-    """Run selected arms over the mini-set and write traces + results JSON.
+    """Run selected arms over a case file and write traces + results JSON.
 
     Offline tests inject ``client`` and ``pricing``. A live call additionally
     requires ``ANTHROPIC_API_KEY`` in the environment and an explicit
@@ -650,6 +725,9 @@ def run_arms(
     unknown_arms = [arm for arm in selected_arms if arm not in ARMS]
     if unknown_arms:
         raise ValueError(f"unknown arm(s): {', '.join(unknown_arms)}")
+    selected_efforts = {
+        arm: (efforts or {}).get(arm, effort_for(arm)) for arm in selected_arms
+    }
 
     table = dict(PRICING_PER_MTOK if pricing is None else pricing)
     if not table:
@@ -669,7 +747,21 @@ def run_arms(
             "no pinned list price for model(s): " + ", ".join(missing)
         )
 
-    cases = load_and_validate(Path(cases_path))
+    for arm, effort in selected_efforts.items():
+        try:
+            effort_request_params(effort)
+        except ValueError as exc:
+            raise ValueError(f"{arm}: {exc}") from exc
+
+    cases_path_obj = Path(cases_path)
+    subset_metadata: dict[str, Any] = {}
+    metadata_path = cases_path_obj.with_suffix(".meta.json")
+    if metadata_path.exists():
+        loaded_metadata = json.loads(metadata_path.read_text())
+        if isinstance(loaded_metadata, dict):
+            subset_metadata = loaded_metadata
+
+    cases = load_and_validate(cases_path_obj)
     if case_ids:
         wanted = list(dict.fromkeys(case_ids))
         by_id = {case.id: case for case in cases}
@@ -680,7 +772,8 @@ def run_arms(
 
     if run_id is None:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        run_id = f"phase2-mini-{stamp}-{uuid.uuid4().hex[:8]}"
+        prefix = "phase2-mini" if label == MINI_SET_LABEL else _safe_name(dev_vs_final)
+        run_id = f"{prefix}-{stamp}-{uuid.uuid4().hex[:8]}"
     run_dir = Path(out_dir) / run_id
     git_commit = _git_commit()
     created_at = _now_iso()
@@ -688,7 +781,6 @@ def run_arms(
     abort_reason: str | None = None
     total_cost = 0.0
     max_case_cost = 0.0
-    prior_total_cost = 0.0
     arm_records: dict[str, list[dict[str, Any]]] = {}
     arm_summaries: dict[str, dict[str, Any]] = {}
     attempted_cases: dict[str, set[str]] = {arm: set() for arm in selected_arms}
@@ -709,7 +801,6 @@ def run_arms(
             )
         created_at = str(existing.get("created_at", created_at))
         git_commit = str(existing.get("git_commit", git_commit))
-        prior_total_cost = float(existing.get("total_cost_usd", 0.0) or 0.0)
         existing_case_ids = existing.get("case_ids")
         if existing_case_ids is not None and list(existing_case_ids) != [
             case.id for case in cases
@@ -723,6 +814,28 @@ def run_arms(
             raise RuntimeError(
                 "resume arm selection does not match the original run"
             )
+        existing_repeats = existing.get("repeats")
+        if existing_repeats is not None and int(existing_repeats) != repeats:
+            raise RuntimeError(
+                "resume repeats do not match the original run"
+            )
+        existing_configs = existing.get("arms")
+        if isinstance(existing_configs, list):
+            prior_efforts = {
+                str(row.get("arm")): str(row.get("effort"))
+                for row in existing_configs
+                if isinstance(row, dict) and row.get("arm") in selected_arms
+            }
+            for arm in selected_arms:
+                if (
+                    arm in prior_efforts
+                    and prior_efforts[arm] != selected_efforts[arm]
+                ):
+                    raise RuntimeError(
+                        "resume effort does not match the original run for "
+                        f"{arm}: {prior_efforts[arm]!r} != "
+                        f"{selected_efforts[arm]!r}"
+                    )
         resume_history = list(existing.get("resume_history", []))
         resume_history.append(
             {
@@ -733,6 +846,24 @@ def run_arms(
             }
         )
 
+    # Lifetime spend for this run id: completed attempts *and* aborted
+    # attempts both cost real money. On resume this baseline prevents a
+    # re-attempt from hiding the aborted attempt's cost.
+    if run_dir.exists():
+        for arm in selected_arms:
+            checkpoint_dir = run_dir / arm / "checkpoints"
+            if not checkpoint_dir.exists():
+                continue
+            for checkpoint_path in sorted(checkpoint_dir.glob("*.json")):
+                try:
+                    payload = json.loads(checkpoint_path.read_text())
+                except (OSError, json.JSONDecodeError):
+                    continue
+                spent = payload.get("cost_usd")
+                if spent is None:
+                    spent = (payload.get("per_case") or {}).get("cost_usd", 0.0)
+                total_cost += float(spent or 0.0)
+
     # Write run identity before the first API call so a process killed
     # mid-run still leaves a resumable run directory. On resume, the prior
     # abort record is preserved in resume_history.
@@ -742,14 +873,15 @@ def run_arms(
             "run_id": run_id,
             "git_commit": git_commit,
             "created_at": created_at,
-            "dev_vs_final": MINI_SET_DEV_VS_FINAL,
-            "label": MINI_SET_LABEL,
+            "dev_vs_final": dev_vs_final,
+            "label": label,
             "run_status": "running",
             "abort_reason": None,
             "cost_ceiling_usd": cost_ceiling,
-            "total_cost_usd": prior_total_cost,
+            "total_cost_usd": total_cost,
             "repeats": repeats,
             "subset_path": subset_path,
+            "subset_metadata": subset_metadata,
             "match_spec_version": MATCH_SPEC_VERSION,
             "prompt_version": PROMPT_VERSION,
             "pricing_basis": "list_sync",
@@ -757,11 +889,19 @@ def run_arms(
             "pricing_per_mtok": pricing_rows,
             "max_tokens": MAX_TOKENS,
             "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
+            "resume_semantics": (
+                "resume from checkpoint allowed; restarting after seeing "
+                "partial results forbidden"
+            ),
             "resume_history": resume_history,
             "case_ids": [case.id for case in cases],
             "selected_arms": selected_arms,
-            "arms": _arm_config_rows(),
-            "note": "mini/smoke only; excluded from every headline number",
+            "arms": _arm_config_rows(selected_efforts),
+            "note": (
+                "mini/smoke only; excluded from every headline number"
+                if label == MINI_SET_LABEL
+                else f"{dev_vs_final} only; not a final/held-out result"
+            ),
         },
     )
 
@@ -774,6 +914,8 @@ def run_arms(
             partial_summaries[arm_name] = arm_summaries.get(arm_name) or _summary(
                 partial_records,
                 n_cases_attempted=len(attempted_cases.get(arm_name, set())),
+                label=label,
+                dev_vs_final=dev_vs_final,
             )
         _write_outputs(
             run_dir=run_dir,
@@ -793,23 +935,31 @@ def run_arms(
             pricing_path=pricing_path,
             resume_history=resume_history,
             selected_arms=selected_arms,
+            efforts=selected_efforts,
+            label=label,
+            dev_vs_final=dev_vs_final,
+            subset_metadata=subset_metadata,
         )
         raise RunAborted(
             message,
             {
                 "run_id": run_id,
                 "run_dir": str(run_dir),
-                "label": MINI_SET_LABEL,
-                "dev_vs_final": MINI_SET_DEV_VS_FINAL,
+                "label": label,
+                "dev_vs_final": dev_vs_final,
             },
         )
 
     for arm in selected_arms:
+        effort = selected_efforts[arm]
         agent = build_agent(
             arm,
             client=client,
             price=prices[arm],
             cost_ceiling_usd=float(cost_ceiling),
+            effort=effort,
+            effort_provisional=effort == "api_default",
+            request_params=effort_request_params(effort),
         )
         records: list[dict[str, Any]] = []
         arm_records[arm] = records
@@ -829,12 +979,19 @@ def run_arms(
                         case_id=case.id,
                         repeat=repeat,
                     )
-                    record = dict(payload["per_case"])
-                    records.append(record)
-                    attempted_cases[arm].add(case.id)
-                    total_cost += float(record["cost_usd"])
-                    max_case_cost = max(max_case_cost, float(record["cost_usd"]))
-                    continue
+                    checkpoint_status = str(payload.get("status", "completed"))
+                    if checkpoint_status == "completed":
+                        record = dict(payload["per_case"])
+                        records.append(record)
+                        attempted_cases[arm].add(case.id)
+                        # Cost was already counted in the resume baseline.
+                        max_case_cost = max(
+                            max_case_cost, float(record["cost_usd"])
+                        )
+                        continue
+                    # An aborted case is not a completed result. It is
+                    # re-attempted on resume; its earlier 0 is never inherited.
+                    # Its spend is already in the lifetime baseline.
 
                 # Cost ceiling check happens before the first API call for
                 # each subsequent case. The estimate is the largest observed
@@ -857,19 +1014,33 @@ def run_arms(
                 attempted_cases[arm].add(case.id)
                 trace = agent.run(case.to_task(), starting_cost_usd=total_cost)
                 score = _score_trace(trace, case)
-                record = _per_case_record(run_id, trace, case, repeat, score)
-                _atomic_write_json(
-                    checkpoint_path,
-                    {
-                        "run_id": run_id,
-                        "task_id": case.id,
-                        "arm": arm,
-                        "repeat": repeat,
-                        "trace": trace.to_dict(),
-                        "score": score,
-                        "per_case": record,
-                    },
+                case_status = (
+                    "aborted" if trace.cost_ceiling_reached else "completed"
                 )
+                record = _per_case_record(
+                    run_id,
+                    trace,
+                    case,
+                    repeat,
+                    score,
+                    status=case_status,
+                )
+                checkpoint = {
+                    "run_id": run_id,
+                    "task_id": case.id,
+                    "arm": arm,
+                    "repeat": repeat,
+                    "status": case_status,
+                    "cost_usd": float(record["cost_usd"]),
+                    "trace": trace.to_dict(),
+                    "score": score,
+                    "per_case": record,
+                }
+                if case_status == "aborted":
+                    checkpoint["abort_reason"] = (
+                        f"cost ceiling reached during {arm}/{case.id}/r{repeat}"
+                    )
+                _atomic_write_json(checkpoint_path, checkpoint)
                 records.append(record)
                 total_cost += float(record["cost_usd"])
                 max_case_cost = max(max_case_cost, float(record["cost_usd"]))
@@ -883,6 +1054,8 @@ def run_arms(
         arm_summaries[arm] = _summary(
             records,
             n_cases_attempted=len(attempted_cases[arm]),
+            label=label,
+            dev_vs_final=dev_vs_final,
         )
 
     _write_outputs(
@@ -903,14 +1076,18 @@ def run_arms(
         pricing_path=pricing_path,
         resume_history=resume_history,
         selected_arms=selected_arms,
+        efforts=selected_efforts,
+        label=label,
+        dev_vs_final=dev_vs_final,
+        subset_metadata=subset_metadata,
     )
     return {
         "run_id": run_id,
         "run_dir": str(run_dir),
         "run_status": "completed",
         "abort_reason": None,
-        "label": MINI_SET_LABEL,
-        "dev_vs_final": MINI_SET_DEV_VS_FINAL,
+        "label": label,
+        "dev_vs_final": dev_vs_final,
         "total_cost_usd": total_cost,
         "arms": {
             arm: {
@@ -974,6 +1151,22 @@ def _parse_arms(raw: str, baseline: bool) -> list[str]:
     return selected
 
 
+def _parse_efforts(raw: str) -> dict[str, str]:
+    efforts: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            raise ValueError(f"effort override must be arm=effort, got {part!r}")
+        arm, effort = (piece.strip() for piece in part.split("=", 1))
+        if arm not in ARMS:
+            raise ValueError(f"unknown arm in --efforts: {arm!r}")
+        effort_request_params(effort)
+        efforts[arm] = effort
+    return efforts
+
+
 def _api_key_status() -> str:
     return "PRESENT" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING"
 
@@ -1025,6 +1218,24 @@ def main() -> None:
         action="store_true",
         help="validate cases and print the run plan without calling the API",
     )
+    parser.add_argument(
+        "--efforts",
+        default="",
+        help=(
+            "comma-separated arm=effort overrides; effort is sent as "
+            "output_config.effort (api_default sends nothing)"
+        ),
+    )
+    parser.add_argument(
+        "--label",
+        default=MINI_SET_LABEL,
+        help=f"result label (default: {MINI_SET_LABEL})",
+    )
+    parser.add_argument(
+        "--dev-vs-final",
+        default=MINI_SET_DEV_VS_FINAL,
+        help=f"dev/final marker (default: {MINI_SET_DEV_VS_FINAL})",
+    )
     args = parser.parse_args()
 
     cases = load_and_validate(Path(args.subset))
@@ -1036,17 +1247,29 @@ def main() -> None:
             parser.error(f"unknown case id(s): {', '.join(unknown)}")
         cases = [case for case in cases if case.id in set(wanted)]
     selected_arms = _parse_arms(args.arms, args.baseline)
+    try:
+        effort_overrides = _parse_efforts(args.efforts)
+    except ValueError as exc:
+        parser.error(str(exc))
+    selected_efforts = {
+        arm: effort_overrides.get(arm, effort_for(arm)) for arm in selected_arms
+    }
 
     plan = {
         "subset": args.subset,
         "cases": len(cases),
         "case_ids": [case.id for case in cases],
-        "label": MINI_SET_LABEL,
+        "label": args.label,
+        "dev_vs_final": args.dev_vs_final,
         "arms": selected_arms,
         "model_ids": {arm: model_id_for(arm) for arm in selected_arms},
         "model_id_status": MODEL_ID_STATUS,
-        "effort": {arm: effort_for(arm) for arm in selected_arms},
-        "effort_provisional": EFFORT_PROVISIONAL,
+        "effort": selected_efforts,
+        "effort_field": "output_config.effort",
+        "effort_transmitted": {
+            arm: effort_is_transmitted(effort)
+            for arm, effort in selected_efforts.items()
+        },
         "prompt_version": PROMPT_VERSION,
         "match_spec_version": MATCH_SPEC_VERSION,
         "max_tokens": MAX_TOKENS,
@@ -1089,6 +1312,9 @@ def main() -> None:
             run_id=args.run_id,
             resume=not args.no_resume,
             pricing_path=args.pricing_file,
+            efforts=effort_overrides or None,
+            label=args.label,
+            dev_vs_final=args.dev_vs_final,
         )
     except RunAborted as exc:
         print(json.dumps({"error": str(exc), **exc.result}, indent=2))

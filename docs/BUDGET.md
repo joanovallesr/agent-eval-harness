@@ -28,6 +28,10 @@ use list-price token costs; actual spend is reported separately.
 | reserve (1 aborted+resumed test run) | — | — | most expensive arm |
 | **test_spend** | — | — | `C · n_t · k · measured_cost/case` |
 
+Phase 3 offline tooling (Task 0 resume fix + Task A sampling/analysis/effort
+plumbing) completed with **$0.000000** model spend. No Phase-3 live stage has
+run; the ledger total stands at **$0.073719**.
+
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms
 when checking remaining budget.

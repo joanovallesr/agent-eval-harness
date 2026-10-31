@@ -13,6 +13,8 @@ parameter can be added later.
 
 from __future__ import annotations
 
+from typing import Mapping
+
 from .metrics import PRICING_PER_MTOK, TokenPrice, price_for
 from .metrics import PricingError
 
@@ -43,6 +45,18 @@ EFFORT_BY_ARM = {
     "sonnet-direct": "api_default",
 }
 EFFORT_PROVISIONAL = True
+# Phase 2/3 default: no effort field is sent. A concrete effort is transmitted
+# through the Anthropic Messages API's ``output_config.effort`` field (verified
+# against anthropic SDK 2.3.0 type definitions:
+# ``anthropic/types/output_config_param.py``). Valid values are low, medium,
+# high, xhigh, and max. Never invent a top-level ``effort`` request field.
+EFFORT_API_DEFAULT = "api_default"
+VALID_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+EFFORT_ORDER = VALID_EFFORTS
+EFFORT_TOLERANCE = 0.02
+EFFORT_FIELD = "output_config.effort"
+# Default placeholder for a trace/agent built without an explicit effort.
+# Agent instances overwrite it with the actual transmission state.
 EFFORT_TRANSMITTED = False
 
 # Frozen for Phase 2. Bump when the system or repair prompt changes.
@@ -87,6 +101,87 @@ def effort_for(arm: str) -> str:
     return EFFORT_BY_ARM[arm]
 
 
+def effort_request_params(effort: str) -> dict[str, dict[str, str]]:
+    """Return the request fragment that transmits ``effort``.
+
+    ``api_default`` means send nothing, so the provider's documented default is
+    used. Any concrete effort is sent as ``output_config={"effort": ...}``.
+    """
+
+    if effort == EFFORT_API_DEFAULT:
+        return {}
+    if effort not in VALID_EFFORTS:
+        raise ValueError(
+            f"unknown effort {effort!r}; expected {EFFORT_API_DEFAULT!r} or one "
+            f"of {', '.join(VALID_EFFORTS)}"
+        )
+    return {"output_config": {"effort": effort}}
+
+
+def effort_is_transmitted(effort: str) -> bool:
+    return effort != EFFORT_API_DEFAULT
+
+
+def select_sonnet_effort(
+    scores: Mapping[str, float],
+    *,
+    default_effort: str = EFFORT_API_DEFAULT,
+) -> str:
+    """EVAL_DESIGN §2: never weaken Sonnet.
+
+    Pick the API default when it ties or beats every measured slice;
+    otherwise pick the strongest measured slice. ``scores`` must include the
+    default, because "whichever scores higher" is undefined otherwise.
+    """
+
+    if default_effort not in scores:
+        raise ValueError(
+            f"Sonnet effort selection needs a score for {default_effort!r}"
+        )
+    best = max(float(value) for value in scores.values())
+    if float(scores[default_effort]) >= best:
+        return default_effort
+    for effort in EFFORT_ORDER:
+        if effort in scores and float(scores[effort]) == best:
+            return effort
+    raise ValueError("no measured effort achieved the best score")
+
+
+def select_shared_haiku_effort(
+    arm_scores: Mapping[str, Mapping[str, float]],
+    *,
+    tolerance: float = EFFORT_TOLERANCE,
+) -> str:
+    """EVAL_DESIGN §2: lowest effort within tolerance of Haiku's best slice.
+
+    Both Haiku arms must use the same effort. For each candidate effort we
+    take the worst score across the Haiku arms (conservative), then choose the
+    lowest effort whose worst score is within ``tolerance`` of the best worst
+    score. The tolerance is pre-registered; it is not tuned after the fact.
+    """
+
+    if not arm_scores:
+        raise ValueError("Haiku effort selection needs at least one arm")
+    efforts = set.intersection(
+        *(set(scores) for scores in arm_scores.values())
+    )
+    if not efforts:
+        raise ValueError("Haiku arms have no common measured effort values")
+    combined = {
+        effort: min(float(scores[effort]) for scores in arm_scores.values())
+        for effort in efforts
+    }
+    best = max(combined.values())
+    eligible = [
+        effort
+        for effort in EFFORT_ORDER
+        if effort in combined and combined[effort] >= best - tolerance
+    ]
+    if not eligible:
+        raise ValueError("no Haiku effort is within tolerance")
+    return eligible[0]
+
+
 def pricing_for(
     model_id: str,
     pricing: dict[str, TokenPrice] | None = None,
@@ -98,9 +193,14 @@ def pricing_for(
 
 __all__ = [
     "ARMS",
+    "EFFORT_API_DEFAULT",
     "EFFORT_BY_ARM",
+    "EFFORT_FIELD",
+    "EFFORT_ORDER",
     "EFFORT_PROVISIONAL",
+    "EFFORT_TOLERANCE",
     "EFFORT_TRANSMITTED",
+    "VALID_EFFORTS",
     "MAX_INFRASTRUCTURE_RETRIES",
     "MAX_HTTP_REQUESTS_PER_CASE_AGENT",
     "MAX_HTTP_REQUESTS_PER_CASE_DIRECT",
@@ -118,6 +218,10 @@ __all__ = [
     "PricingError",
     "TokenPrice",
     "effort_for",
+    "effort_is_transmitted",
+    "effort_request_params",
     "model_id_for",
+    "select_shared_haiku_effort",
+    "select_sonnet_effort",
     "pricing_for",
 ]

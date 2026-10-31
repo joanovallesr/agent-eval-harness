@@ -22,14 +22,20 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 2 mini-set smoke complete
+## Status: Phase 3 offline plumbing ready
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
 the 20-case mini-set at a total list-price cost of **$0.073719**; those numbers
 are `mini/smoke` only and are excluded from every headline result. Model IDs
 are verified/pinned in `src/eval/config.py` and list prices are pinned in
-`config/pricing.list_sync.2026-10-31.json`. Phase 3 has not started.
+`config/pricing.list_sync.2026-10-31.json`.
+
+Phase 3's offline half is implemented: deterministic pilot/dev sampling over
+the pinned revision, aborted-case resume semantics, paired analysis with
+variance components and §7 sizing, and effort plumbing. **No Phase-3 live
+stage has run yet**; the pilot waits for an explicit go, and no
+`docs/PRE_REGISTRATION.md` exists.
 
 ## Layout
 
@@ -44,14 +50,16 @@ agent-eval-harness/
 │   ├── mini_set.py   # mini-set loader + schema/scorer validation
 │   ├── config.py     # explicit model/effort/prompt configuration
 │   ├── scorer.py     # schema-free per-case matcher (MATCH_SPEC v1.1)
-│   ├── metrics.py    # cost from logged usage, CIs, latency
+│   ├── metrics.py    # cost, paired intervals, variance components, §7 sizing
+│   ├── analysis.py   # Phase-3 analysis dry run over a results directory
 │   ├── judge.py      # LLM-as-judge (different model family from the agent)
 │   └── calibration.py# judge calibration vs human labels (Cohen's kappa)
 ├── tests/            # pytest: scorer pairs, agent loop, harness, mini-set
 ├── scripts/
 │   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
 │   ├── audit_required_filter.py  # final required-args rule audit
-│   └── audit_variance_m.py   # §7 m/u usable-cases sensitivity
+│   ├── audit_variance_m.py   # §7 m/u usable-cases sensitivity
+│   └── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
 ├── data/
 │   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
 │   └── README.md     # revision pin, license draft, split notes
@@ -133,6 +141,64 @@ arms and case selection, so completed checkpoints are never reordered or
 rescored. The run metadata records the exact list prices used and labels
 `max_tokens` as provisional until it is pinned.
 
+
+## Phase 3 offline commands
+
+The sampler writes only gitignored case files and aggregate metadata:
+
+```bash
+# Pilot: ~30 distinct non-candidate tools, one case each (seed 42).
+PYTHONPATH=src:scripts python scripts/sample_cases.py \
+  --stage pilot --n-tools 30 --cases-per-tool 1 --seed 42
+
+# Dev shape is proposed after the pilot; this is the command form.
+PYTHONPATH=src:scripts python scripts/sample_cases.py \
+  --stage dev --n-tools 12 --cases-per-tool 10 --seed 43
+```
+
+A live run takes the key from the repo-root `.env` without printing it:
+
+```bash
+set -a; source .env; set +a
+PYTHONPATH=src python -m eval.harness \
+  --subset data/phase3/pilot.jsonl --out results --arms all \
+  --cost-ceiling 1.00 \
+  --pricing-file config/pricing.list_sync.2026-10-31.json \
+  --label phase3/pilot --dev-vs-final pilot
+```
+
+The analysis dry run reads a results directory and writes aggregates only:
+
+```bash
+PYTHONPATH=src python -m eval.analysis --run-dir results/<run_id> \
+  --cases data/phase3/dev.jsonl --out results/<run_id>/analysis.json
+```
+
+**Effort mechanism (verified against anthropic SDK 2.3.0 type definitions).**
+A concrete effort is sent as `output_config={"effort": "low"|"medium"|"high"|
+"xhigh"|"max"}` (`anthropic/types/output_config_param.py`); there is no
+top-level `effort` request field. `api_default` sends no effort field.
+
+**Effort selection rule.** `select_sonnet_effort` never weakens Sonnet: it
+picks the API default unless a measured slice is strictly stronger.
+`select_shared_haiku_effort` gives both Haiku arms one effort: the lowest
+effort whose worst score across the two Haiku arms is within the
+pre-registered tolerance (`EFFORT_TOLERANCE = 0.02`) of the best such score.
+The pilot cost gate is `pilot_cost_gate(ratio)`: pass only when the aggregate
+haiku-agent / sonnet-direct list-price ratio is `<= 0.10`.
+
+**Usage fields.** The SDK's `Usage` object returns `input_tokens`,
+`output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`,
+`output_tokens_details.thinking_tokens`, and optional cache/server-tool
+breakdowns. `output_tokens` is the inclusive, authoritative billing total and
+already contains thinking tokens; `output_tokens_details.thinking_tokens` is a
+read-only decomposition and must not be added again.
+
+**Aborted-case resume.** A cost-ceiling abort is checkpointed with
+`status: "aborted"`, not as a completed result. Its 0 may appear only in the
+aborted run's own accounting. A resume re-attempts that case; the earlier 0 is
+never inherited. Resuming from a checkpoint is allowed; restarting a run after
+seeing partial results is forbidden.
 
 ## Ground rules (from the resume quest)
 
