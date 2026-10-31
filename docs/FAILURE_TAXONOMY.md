@@ -30,6 +30,9 @@ fire.
 - **hallucinated-result** — reported a tool output that never happened.
 - **format-error** — right content, wrong structure (matters for structured outputs).
 - **partial-answer** — correct but incomplete.
+- **truncated** — the response stopped at the `max_tokens` cap before the
+  call set was complete. This is an output-limit event; it does not claim the
+  model chose to stop.
 
 ## Labeling protocol
 1. Label from the trace, not from vibes — link the tool call that went wrong.
