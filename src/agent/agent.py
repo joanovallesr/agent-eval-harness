@@ -86,6 +86,7 @@ class AgentTrace:
     price_configured: bool = False
     latency_s: float = 0.0
     stopped_early: bool = False
+    cost_ceiling_reached: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -106,6 +107,10 @@ class RequestFailed(RuntimeError):
         self.retries = retries
         self.cause = cause
         self.kind = kind
+
+
+class CostCeilingReached(RuntimeError):
+    """Accumulated actual cost reached the per-run ceiling mid-case."""
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -293,6 +298,13 @@ class Agent:
     price:
         Pinned list price for this model. ``None`` means cost stays 0 and the
         harness must refuse a live run.
+    cost_ceiling_usd:
+        Per-run ceiling. The accumulated actual cost is checked after every
+        model response and before any additional schema-repair or
+        infrastructure attempt. Infrastructure retries are per model request
+        (initial + 2 = 3 HTTP requests); schema-repair retries are per case
+        (initial + 2 = 3 model requests). Maximum HTTP requests per case:
+        9 for ``haiku-agent``, 3 for a direct arm.
     """
 
     def __init__(
@@ -307,6 +319,7 @@ class Agent:
         prompt_version: str = PROMPT_VERSION,
         client: Any = None,
         price: TokenPrice | None = None,
+        cost_ceiling_usd: float | None = None,
         max_tokens: int = MAX_TOKENS,
         max_schema_repair_retries: int = MAX_SCHEMA_REPAIR_RETRIES,
         max_infrastructure_retries: int = MAX_INFRASTRUCTURE_RETRIES,
@@ -325,6 +338,7 @@ class Agent:
         self.prompt_version = prompt_version
         self.client = client
         self.price = price
+        self.cost_ceiling_usd = cost_ceiling_usd
         self.max_tokens = max_tokens
         self.max_schema_repair_retries = max_schema_repair_retries
         self.max_infrastructure_retries = max_infrastructure_retries
@@ -367,12 +381,22 @@ class Agent:
             )
         return schemas
 
+    def _budget_reached(self, trace: AgentTrace, starting_cost_usd: float) -> bool:
+        if self.cost_ceiling_usd is None:
+            return False
+        return starting_cost_usd + trace.cost_usd >= self.cost_ceiling_usd
+
     def _request(
         self,
         messages: list[dict[str, Any]],
         schemas: list[dict[str, Any]],
+        budget_check: Callable[[], bool] | None = None,
     ) -> tuple[Any, int, float]:
-        """Make one request with the shared infrastructure-retry policy."""
+        """Make one request with the shared infrastructure-retry policy.
+
+        ``budget_check`` runs before the request and before each
+        infrastructure retry, using accumulated actual cost only.
+        """
 
         started = time.perf_counter()
         retries = 0
@@ -387,6 +411,8 @@ class Agent:
             }
         )
         while True:
+            if budget_check is not None and budget_check():
+                raise CostCeilingReached("cost ceiling reached before an API request")
             try:
                 response = self._client().messages.create(**kwargs)
                 return response, retries, time.perf_counter() - started
@@ -394,6 +420,10 @@ class Agent:
                 if _is_infrastructure_error(exc):
                     if retries < self.max_infrastructure_retries:
                         retries += 1
+                        if budget_check is not None and budget_check():
+                            raise CostCeilingReached(
+                                "cost ceiling reached before an infrastructure retry"
+                            ) from exc
                         self._sleep(min(2 ** (retries - 1), 8))
                         continue
                     raise RequestFailed(
@@ -453,13 +483,21 @@ class Agent:
                 continue
             call_errors = [
                 error for error in errors if error.get("call_index") == index
-            ] or errors
+            ]
+            if call_errors:
+                content = self._repair_message(call_errors, schemas)
+            else:
+                content = (
+                    "Call rejected: this attempt failed schema validation "
+                    "elsewhere. This call was not executed and no tool output "
+                    "is available."
+                )
             tool_results.append(
                 {
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
                     "is_error": True,
-                    "content": self._repair_message(call_errors, schemas),
+                    "content": content,
                 }
             )
         if tool_results:
@@ -473,7 +511,7 @@ class Agent:
         if not trace.final_attempt_calls:
             trace.format_failure = True
 
-    def run(self, task: dict[str, Any]) -> AgentTrace:
+    def run(self, task: dict[str, Any], *, starting_cost_usd: float = 0.0) -> AgentTrace:
         """Run one benchmark case and return the full trace."""
 
         schemas = self._offered_schemas(task)
@@ -494,10 +532,25 @@ class Agent:
         )
         attempt_index = 0
 
+        def budget_check() -> bool:
+            return self._budget_reached(trace, starting_cost_usd)
+
         while attempt_index < total_attempts:
             attempt_index += 1
             try:
-                response, infra_retries, latency = self._request(messages, schemas)
+                response, infra_retries, latency = self._request(
+                    messages,
+                    schemas,
+                    budget_check,
+                )
+            except CostCeilingReached as exc:
+                trace.cost_ceiling_reached = True
+                trace.stopped_early = True
+                trace.failure_reason = "cost_ceiling"
+                trace.format_failure = True
+                trace.error = str(exc)
+                self._set_final(trace, [])
+                break
             except RequestFailed as exc:
                 trace.infrastructure_retry_count += exc.retries
                 trace.stopped_early = True
@@ -518,14 +571,14 @@ class Agent:
             stop_reason = str(_get(response, "stop_reason", "") or "")
 
             errors: list[dict[str, Any]] = []
-            if self.schema_repair_enabled and stop_reason not in {
-                "refusal",
-                "max_tokens",
-            }:
+            if stop_reason not in {"refusal", "max_tokens"}:
+                # Schema-aware validation is the repair signal for the agent
+                # arm and a diagnostic only for direct arms.
                 errors = validate_tool_calls(blocks, schemas)
                 for error in errors:
                     error["attempt"] = attempt_index
 
+            trace.validation_errors.extend(errors)
             trace.attempts.append(
                 {
                     "attempt": attempt_index,
@@ -542,6 +595,18 @@ class Agent:
             )
             trace.tool_calls.extend(_extract_calls(blocks))
 
+            # Check accumulated actual cost after every model response,
+            # before any schema-repair or infrastructure attempt.
+            if budget_check():
+                trace.cost_ceiling_reached = True
+                trace.stopped_early = True
+                trace.failure_reason = "cost_ceiling"
+                trace.format_failure = True
+                if stop_reason not in {"refusal", "max_tokens"}:
+                    trace.final_schema_valid = not errors
+                self._set_final(trace, blocks)
+                break
+
             if stop_reason in {"refusal", "max_tokens"}:
                 trace.stopped_early = True
                 trace.failure_reason = (
@@ -554,14 +619,8 @@ class Agent:
                 break
 
             if not self.schema_repair_enabled:
+                trace.final_schema_valid = not errors
                 self._set_final(trace, blocks)
-                # Diagnostics only: direct arms never repair, but the harness
-                # still records whether the final attempt was schema-valid.
-                diagnostics = validate_tool_calls(blocks, schemas)
-                trace.validation_errors.extend(diagnostics)
-                trace.final_schema_valid = not diagnostics
-                trace.attempts[-1]["validation_errors"] = diagnostics
-                trace.attempts[-1]["schema_valid"] = not diagnostics
                 if not trace.final_attempt_calls:
                     trace.failure_reason = "text_only"
                 break
@@ -571,7 +630,6 @@ class Agent:
                 self._set_final(trace, blocks)
                 break
 
-            trace.validation_errors.extend(errors)
             if attempt_index >= total_attempts:
                 trace.schema_validation_failed = True
                 trace.final_schema_valid = False
@@ -617,6 +675,7 @@ def build_agent(
 __all__ = [
     "Agent",
     "AgentTrace",
+    "CostCeilingReached",
     "PricingError",
     "RequestFailed",
     "build_agent",

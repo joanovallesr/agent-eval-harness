@@ -5,9 +5,10 @@ recorded in ``docs/EVAL_DESIGN.md`` §2, not verified/pinned IDs, and no
 Anthropic list prices are recorded anywhere in the repository. A live run is
 blocked until the owner supplies verified IDs and explicit list prices.
 
-Effort is recorded as provisional metadata. No effort parameter is invented or
-sent to the API; ``request_params`` is the single place where a real,
-owner-pinned API parameter can be added later.
+Effort is recorded as provisional metadata. Phase 2 transmits **no** effort
+parameter: all three arms record ``api_default``. Final effort selection is
+Phase 3. ``request_params`` is the single place where a real, owner-pinned API
+parameter can be added later.
 """
 
 from __future__ import annotations
@@ -32,9 +33,12 @@ ARM_MODEL_KEYS = {
 }
 
 # Provisional only. Final effort selection is Phase 3 (EVAL_DESIGN §2).
+# Phase 2 transmits no effort parameter at all, so every arm records the same
+# API-default marker. Do not claim a lower effort was used unless the harness
+# actually sends it.
 EFFORT_BY_ARM = {
-    "haiku-agent": "low",
-    "haiku-direct": "low",
+    "haiku-agent": "api_default",
+    "haiku-direct": "api_default",
     "sonnet-direct": "api_default",
 }
 EFFORT_PROVISIONAL = True
@@ -52,6 +56,18 @@ MAX_TOKENS_PROVISIONAL = True
 # This is a retry cap, not a total-attempt cap: up to 3 attempts in total.
 MAX_SCHEMA_REPAIR_RETRIES = 2
 MAX_INFRASTRUCTURE_RETRIES = 2
+
+# Nested retry policy (Phase 2):
+# - infrastructure retries are per model request: initial + 2 retries = 3
+#   HTTP requests for one model request;
+# - schema-repair retries are per case: initial + 2 repair attempts = 3 model
+#   requests for haiku-agent.
+# Therefore the maximum HTTP requests per case/repeat are 3 * 3 = 9 for
+# haiku-agent and 1 * 3 = 3 for a direct arm.
+MAX_HTTP_REQUESTS_PER_CASE_AGENT = (
+    1 + MAX_SCHEMA_REPAIR_RETRIES
+) * (1 + MAX_INFRASTRUCTURE_RETRIES)
+MAX_HTTP_REQUESTS_PER_CASE_DIRECT = 1 + MAX_INFRASTRUCTURE_RETRIES
 
 MINI_SET_LABEL = "mini/smoke"
 MINI_SET_DEV_VS_FINAL = "mini_smoke"
@@ -85,6 +101,8 @@ __all__ = [
     "EFFORT_PROVISIONAL",
     "EFFORT_TRANSMITTED",
     "MAX_INFRASTRUCTURE_RETRIES",
+    "MAX_HTTP_REQUESTS_PER_CASE_AGENT",
+    "MAX_HTTP_REQUESTS_PER_CASE_DIRECT",
     "MAX_SCHEMA_REPAIR_RETRIES",
     "MAX_TOKENS",
     "MAX_TOKENS_PROVISIONAL",

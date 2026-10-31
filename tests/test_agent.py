@@ -11,7 +11,12 @@ from types import SimpleNamespace
 import pytest
 
 from agent.agent import AgentTrace, build_agent, validate_tool_calls
-from eval.config import MAX_SCHEMA_REPAIR_RETRIES
+from eval.config import (
+    EFFORT_BY_ARM,
+    MAX_HTTP_REQUESTS_PER_CASE_AGENT,
+    MAX_HTTP_REQUESTS_PER_CASE_DIRECT,
+    MAX_SCHEMA_REPAIR_RETRIES,
+)
 from eval.metrics import TokenPrice
 
 PRICE = TokenPrice(input=1.0, output=2.0, cache_read=0.1, cache_write=1.5)
@@ -85,6 +90,12 @@ def weather_task() -> dict:
     }
 
 
+def test_phase2_effort_is_api_default_and_retry_bounds_are_documented():
+    assert set(EFFORT_BY_ARM.values()) == {"api_default"}
+    assert MAX_HTTP_REQUESTS_PER_CASE_AGENT == 9
+    assert MAX_HTTP_REQUESTS_PER_CASE_DIRECT == 3
+
+
 def test_valid_tool_use_succeeds_for_direct_and_agent_arms():
     for arm in ("haiku-direct", "haiku-agent"):
         agent, client = make_agent(
@@ -107,8 +118,10 @@ def test_valid_tool_use_succeeds_for_direct_and_agent_arms():
         assert trace.schema_validation_failed is False
         assert trace.format_failure is False
         assert trace.model_id == "claude-haiku-5-5"
-        assert trace.effort == "low"
+        assert trace.effort == "api_default"
         assert trace.effort_provisional is True
+        assert trace.effort_transmitted is False
+        assert "effort" not in client.messages.calls[0]
 
 
 def test_text_only_direct_reply_is_empty_and_a_format_failure():
@@ -311,6 +324,41 @@ def test_direct_arms_record_schema_diagnostics_without_repairing():
     assert trace.schema_validation_failed is False
     assert trace.validation_errors[0]["kind"] == "schema"
     assert trace.final_schema_valid is False
+
+
+def test_parallel_attempt_repair_returns_one_rejected_result_per_tool_use_id():
+    agent, client = make_agent(
+        "haiku-agent",
+        [
+            response(
+                [
+                    tool_block("get_weather", {"city": "Paris"}, "toolu_valid"),
+                    tool_block("get_weather", {"city": 123}, "toolu_invalid"),
+                ]
+            ),
+            response([tool_block("get_weather", {"city": "Paris"}, "toolu_final")]),
+        ],
+    )
+
+    trace = agent.run(weather_task())
+
+    assert trace.retry_count == 1
+    assert trace.final_attempt_calls[0]["id"] == "toolu_final"
+    repair = client.messages.calls[1]["messages"][-1]["content"]
+    assert isinstance(repair, list)
+    assert len(repair) == 2
+    assert {block["tool_use_id"] for block in repair} == {
+        "toolu_valid",
+        "toolu_invalid",
+    }
+    assert all(block["type"] == "tool_result" for block in repair)
+    assert all(block["is_error"] is True for block in repair)
+
+    by_id = {block["tool_use_id"]: block["content"] for block in repair}
+    assert "not executed" in by_id["toolu_valid"].lower()
+    assert "no tool output" in by_id["toolu_valid"].lower()
+    assert "Validation errors" in by_id["toolu_invalid"]
+    assert "city" in by_id["toolu_invalid"]
 
 
 def test_multiple_calls_and_final_attempt_rule_are_preserved():

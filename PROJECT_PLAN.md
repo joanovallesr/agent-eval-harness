@@ -52,8 +52,10 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
       API usage**; per-run cost ceiling with loud abort; checkpoints; aborted
       runs recorded, not deleted.
 - [ ] `haiku-direct` and `sonnet-direct`: single-prompt, no-loop arms sharing
-      the pinned tool-use interface (EVAL_DESIGN §2). Batch path for
-      direct-prompt passes (list-price accounting kept separate, §8).
+      the pinned tool-use interface (EVAL_DESIGN §2). **Batch path deferred by
+      owner decision 2026-10-31 and out of scope for Phase 2; Phase 2 uses
+      synchronous list-price accounting only (`pricing_basis: list_sync`).**
+      (The EVAL_DESIGN §8 batch path remains a later-phase item.)
 - [ ] Set the provider-console spend limit (second line of defense) and
       create `docs/BUDGET.md` actuals table.
 - [ ] Measurable: all three arms run end-to-end on the mini-set from one

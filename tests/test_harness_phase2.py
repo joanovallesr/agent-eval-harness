@@ -164,6 +164,53 @@ def test_checkpoint_resume_does_not_repeat_completed_entries(tmp_path):
     assert run_meta["resume_history"][0]["previous_abort_reason"]
 
 
+def test_cost_ceiling_is_checked_after_a_response_before_schema_repair(tmp_path):
+    case = load_three_cases()[1]
+    client = FakeClient(
+        [
+            response(
+                [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_bad",
+                        "name": "get_weather",
+                        "input": {"city": 123},
+                    }
+                ]
+            ),
+            gold_response(case),
+        ]
+    )
+
+    with pytest.raises(RunAborted):
+        run_arms(
+            MINI_SET,
+            tmp_path,
+            ["haiku-agent"],
+            client=client,
+            pricing={"claude-haiku-5-5": PRICE},
+            cost_ceiling=CASE_COST,
+            case_ids=[case.id],
+            run_id="test-midcase-ceiling",
+        )
+
+    # The first response reaches the ceiling; no repair request is sent.
+    assert len(client.messages.calls) == 1
+    run_dir = tmp_path / "test-midcase-ceiling"
+    run_meta = json.loads((run_dir / "run.json").read_text())
+    assert run_meta["run_status"] == "aborted"
+    assert run_meta["abort_reason"].startswith("cost ceiling reached after")
+
+    arm_results = json.loads((run_dir / "haiku-agent" / "results.json").read_text())
+    record = arm_results["per_case"][0]
+    assert record["failure_reason"] == "cost_ceiling"
+    assert record["cost_ceiling_reached"] is True
+    assert record["retry_count"] == 0
+    assert record["format_failure"] is True
+    assert record["exact"] == 0
+    assert arm_results["summary"]["format_failure_breakdown"]["cost_ceiling"] == 1
+
+
 def test_results_json_contains_required_run_case_and_summary_fields(tmp_path):
     case = load_three_cases()[0]
     client = FakeClient([gold_response(case)])
@@ -196,8 +243,9 @@ def test_results_json_contains_required_run_case_and_summary_fields(tmp_path):
     assert run_block["dev_vs_final"] == "mini_smoke"
     assert run_block["label"] == "mini/smoke"
     assert run_block["model_id"] == "claude-haiku-5-5"
-    assert run_block["effort"] == "low"
+    assert run_block["effort"] == "api_default"
     assert run_block["effort_provisional"] is True
+    assert run_block["effort_transmitted"] is False
     assert run_block["prompt_version"] == "phase2-mini-v1"
     assert run_block["match_spec_version"] == "1.1"
     assert run_block["run_status"] == "completed"

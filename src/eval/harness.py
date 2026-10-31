@@ -10,9 +10,13 @@ One command runs all three arms, or a single arm / case subset for debugging::
         --pricing-file <explicit-pricing.json>
 
 Cost comes from logged API usage at pinned list prices, never from estimates.
-A live run requires an explicit per-run ceiling. Case-level checkpoints live
-under the gitignored ``results/`` tree so an interrupted run can resume
-without repeating completed ``(arm, case, repeat)`` entries.
+A live run requires an explicit per-run ceiling. Accumulated actual cost is
+checked after every model response and before any additional schema-repair or
+infrastructure attempt. Infrastructure retries are per model request, so the
+maximum HTTP requests per case/repeat are 9 for ``haiku-agent`` and 3 for a
+direct arm. Case-level checkpoints live under the gitignored ``results/`` tree
+so an interrupted run can resume without repeating completed
+``(arm, case, repeat)`` entries.
 
 Results layout (all under the gitignored output directory)::
 
@@ -75,7 +79,7 @@ RETRY_RATE_DEFINITION = (
 FORMAT_FAILURE_RATE_DEFINITION = (
     "cases with format_failure true / scored cases, per arm, broken down by "
     "no_tool_use, malformed_block, schema_validation_after_retries, refusal, "
-    "truncated, and infrastructure_exhausted"
+    "truncated, infrastructure_exhausted, api_error, and cost_ceiling"
 )
 
 RESULTS_CONTRACT = {
@@ -118,6 +122,7 @@ RESULTS_CONTRACT = {
         "schema_validation_failed",
         "schema_failure",
         "final_schema_valid",
+        "cost_ceiling_reached",
         "retry_count",
         "infrastructure_retry_count",
         "validation_errors",
@@ -236,6 +241,7 @@ def _score_trace(
         "truncated",
         "infrastructure_exhausted",
         "api_error",
+        "cost_ceiling",
     }:
         kinds.append(trace.failure_reason)
 
@@ -257,6 +263,7 @@ def _score_trace(
         "truncated",
         "infrastructure_exhausted",
         "api_error",
+        "cost_ceiling",
     }:
         # Symmetric failure policy: these events count as failures even if a
         # partial tool_use block happened to survive in the final message.
@@ -300,6 +307,7 @@ def _per_case_record(
         "schema_validation_failed": bool(trace.schema_validation_failed),
         "schema_failure": trace.final_schema_valid is False,
         "final_schema_valid": trace.final_schema_valid,
+        "cost_ceiling_reached": bool(trace.cost_ceiling_reached),
         "retry_count": int(trace.retry_count),
         "infrastructure_retry_count": int(trace.infrastructure_retry_count),
         "validation_errors": list(trace.validation_errors),
@@ -791,7 +799,12 @@ def run_arms(
         )
 
     for arm in selected_arms:
-        agent = build_agent(arm, client=client, price=prices[arm])
+        agent = build_agent(
+            arm,
+            client=client,
+            price=prices[arm],
+            cost_ceiling_usd=float(cost_ceiling),
+        )
         records: list[dict[str, Any]] = []
         arm_records[arm] = records
         for case in cases:
@@ -836,7 +849,7 @@ def run_arms(
                     )
 
                 attempted_cases[arm].add(case.id)
-                trace = agent.run(case.to_task())
+                trace = agent.run(case.to_task(), starting_cost_usd=total_cost)
                 score = _score_trace(trace, case)
                 record = _per_case_record(run_id, trace, case, repeat, score)
                 _atomic_write_json(
@@ -854,6 +867,12 @@ def run_arms(
                 records.append(record)
                 total_cost += float(record["cost_usd"])
                 max_case_cost = max(max_case_cost, float(record["cost_usd"]))
+
+                if trace.cost_ceiling_reached:
+                    abort(
+                        f"cost ceiling reached after {arm}/{case.id}/r{repeat}: "
+                        f"${total_cost:.6f} >= ${float(cost_ceiling):.6f}"
+                    )
 
         arm_summaries[arm] = _summary(
             records,

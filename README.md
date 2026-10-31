@@ -118,10 +118,17 @@ if any selected model has no price, and refuses a priced token class with no
 pinned cache price. Cost is computed from logged usage, never from token
 estimates.
 
-Batch direct-prompt submission is **not implemented** in Phase 2. All runs use
-synchronous list-price accounting (`pricing_basis: "list_sync"`); the design's
-batch path has no pinned batch prices here, so it is left for a later phase
-rather than mixed into the synchronous cost basis.
+Batch direct-prompt submission is **deferred and out of scope for Phase 2**
+(owner decision 2026-10-31). All runs use synchronous list-price accounting
+(`pricing_basis: "list_sync"`); the design's batch path remains a later-phase
+item and is not mixed into the Phase-2 cost basis.
+
+Effort is recorded as `api_default` for all three arms; **no effort parameter
+is transmitted** in Phase 2. Final effort selection is Phase 3. The cost
+ceiling is checked after every model response and before any additional
+schema-repair or infrastructure attempt. Infrastructure retries are per model
+request, so the maximum HTTP requests per case/repeat are 9 for `haiku-agent`
+and 3 for a direct arm.
 
 Results are written under the gitignored `results/` tree: case checkpoints,
 per-arm `results.json` files, a combined `results.json`, and `summary.json`.
