@@ -161,8 +161,9 @@ it.
   `cc-by-4.0`, gated click-through, APIGen citation requested, and a
   "research purposes only" note. The drafted verdict and open questions are in
   `data/README.md`. These terms are **not yet confirmed for republication**;
-  until I confirm the click-through terms I accepted, no raw dataset
-  row, query, gold answer, full tool schema, or reproducing trace is published.
+  until the click-through terms are verified against the accepted terms, no
+  raw dataset row, query, gold answer, full tool schema, or reproducing trace
+  is published.
   Aggregates, counts, tool names, and hand-written tasks are safe.
 - **Cluster and split unit is the tool, not the category (pivot
   2026-10-25).** xLAM rows carry only id/query/answers/tools; the "21
@@ -178,15 +179,15 @@ it.
   malformed gold call is excluded and counted (below); a gold call that omits
   a **core input** is excluded under the **final** required-arguments rule
   (below).
-- **Malformed-gold exclusion — FINAL (my decision, 2026-10-26).** A row is
+- **Malformed-gold exclusion — FINAL (2026-10-26).** A row is
   excluded when a gold call has a missing or non-string tool name, non-object
   arguments, or string-encoded arguments. The row is excluded **before** the
   split, its count is reported, and it is a pre-registered exclusion — **not**
   a score of 0. The pinned revision has **zero** such rows (defensive only):
   all 100,011 gold calls carry a string name and a JSON object in
   `arguments`.
-- **Required-arguments filter — FINAL: description-aware refinement (my
-  decision, 2026-10-26).** A gold call is excluded only when it omits a
+- **Required-arguments filter — FINAL: description-aware refinement
+  (2026-10-26).** A gold call is excluded only when it omits a
   **core input**.
   A missing parameter is not core when either condition holds, with the name
   check taking precedence:
@@ -329,8 +330,7 @@ renaming it.)
     `u = √((m−1)/χ²_{0.20, m−1})`, **m = number of dev tools in the LOTO
     estimate**. χ²_{0.20, m−1} denotes the lower-20% quantile
     (P(X ≤ x) = 0.20), so this is an 80% upper confidence limit.
-    **m is no longer 13.** **Final rule (decision 2; I decided this on
-    2026-10-26):** `m`
+    **m is no longer 13.** **Final rule (decision 2, 2026-10-26):** `m`
     is the count of dev tools (non-candidate tools) with **≥10 usable cases in
     the actual Phase 3 dev sample**, and `u` is recomputed from that `m` with
     the formula above. `m`, `u`, `C`, and `n_t` are **not locked by this
@@ -344,10 +344,8 @@ renaming it.)
   - If τ̂² ≈ 0, use the 100-case floor for n_t and note the interval is
     within-noise-driven.
 - **Usable-cases rule for `m` — FINAL rule, numbers pending Phase 3
-  (my decision, 2026-10-26).** Counts below are from non-candidate dev tools
-  only
-  and come from the full pinned revision, **not** from the Phase 3 dev
-  sample. "Structural basis" counts single-tool cases after filters 1–3;
+  (2026-10-26).** Counts below are from non-candidate dev tools only and come
+  from the full pinned revision, **not** from the Phase 3 dev sample. "Structural basis" counts single-tool cases after filters 1–3;
   "all-filter basis" applies the final description-aware required-arguments
   rule too. The table is computed by `scripts/audit_variance_m.py`. **The
   `≥10` row is the chosen rule; every other row is sensitivity only.** In
@@ -388,8 +386,8 @@ renaming it.)
   chosen on dev evidence. Worked check: at C = 6 the t-quantiles sum to
   2.571 + 0.920 = 3.491, so 80% power at Δ = 0 needs s_pess < 3.5 points; at
   C = 8 the bar is s_pess < 4.3 points. The numeric C and `n_t` are **not
-  fixed here**: they are selected in pre-registration after I pick
-  the usable-cases threshold above.
+  fixed here**: they are selected in pre-registration after the usable-cases
+  threshold above is applied.
 - **One `n_t` for every held-out tool** — the max of the per-tool
   requirements, floor 100 usable cases — so the pooled per-case mean
   coincides with §1's equal-weighted estimand. Per-tool requirement:

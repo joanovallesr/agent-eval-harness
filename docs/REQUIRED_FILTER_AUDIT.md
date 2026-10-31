@@ -1,6 +1,6 @@
 # Required-Arguments Filter Audit — Pinned xLAM Revision
 
-**Status: FINAL (my decision 1, 2026-10-26).** The required-arguments
+**Status: FINAL (decision 1, 2026-10-26).** The required-arguments
 rule is the deterministic description-aware rule implemented in
 `scripts/select_candidates.py` and reproduced here. The report keeps
 the interim "no `default` key = required" heuristic as historical
@@ -35,7 +35,7 @@ FINAL description-aware exclusion, and asserts the pinned counts below.
 | Malformed gold tool names | 0 |
 | Gold names absent from the row's `tools` | 0 |
 | Malformed gold arguments (non-object/string-encoded) | 0 |
-| **Malformed gold rows (final exclusion, my decision 3)** | **0** |
+| **Malformed gold rows (final exclusion, decision 3)** | **0** |
 | **Rows removed by the interim heuristic (historical, not the rule)** | **1,316** |
 | **Rows removed by the FINAL rule (core-input only)** | **38** |
 | Missing-parameter instances | 1,432 |
@@ -209,7 +209,7 @@ These are the only missing parameters without a documented default/optional fall
 | 42 | `integrate` | `method` | yes | The method of numerical integration to use. Choices are 'trapezoid' or 'simpson'. |
 | 43 | `sort_numbers` | `numbers` | yes | The list of numbers to be sorted. |
 
-## FINAL rule (my decision 1, 2026-10-26)
+## FINAL rule (decision 1, 2026-10-26)
 
 The required-arguments rule is **description-aware refinement**. A row is excluded only when a gold call omits a **core input**. A missing parameter is not a core input when either lexical condition holds; the filter/pagination/sort name check has precedence:
 

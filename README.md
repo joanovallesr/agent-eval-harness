@@ -37,14 +37,13 @@ variance components and §7 sizing, and effort plumbing. The Stage 1 pilot ran
 on 30 shared non-candidate-tool cases at k=1 for **$0.095948** total; those
 numbers are `pilot` only and excluded from headline results. The aggregate
 pilot list-price cost ratio was **0.0532**, clearing the pre-set 0.10 gate.
-I approved raising the Stage 2 ceiling to **$1.03**; the effort slices
-completed under it at **$1.023421**. The §2 selection functions chose Haiku
-shared = **`low`** and Sonnet = **`api_default`**. The Sonnet choice rests on
-a one-case margin over
-`max` and is recorded as noise-level evidence. I ran the approved Stage 3 dev
-sample — 30 tools × 12 cases, k=1 — for **$1.264953** under its **$1.50**
-ceiling. Dev exact match was 0.825 for both Haiku arms and 0.8194 for Sonnet;
-these are dev-only numbers. I have not started Stage 4, and no
+Stage 2 ceiling: **$1.03**; final spend: **$1.023421**. The §2 selection
+functions chose Haiku shared = **`low`** and Sonnet = **`api_default`**. The
+Sonnet choice rests on a one-case margin over `max` and is recorded as
+noise-level evidence. I ran the Stage 3 dev sample — 30 tools × 12 cases,
+k=1 — for **$1.264953** under its **$1.50** ceiling. Dev exact match was 0.825
+for both Haiku arms and 0.8194 for Sonnet; these are dev-only numbers. I have
+not started Stage 4, and no
 `docs/PRE_REGISTRATION.md` exists.
 
 ## Layout
@@ -78,7 +77,7 @@ agent-eval-harness/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
-│   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit for my sign-off
+│   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit (final rule)
 │   ├── BUDGET.md           # $20 ledger and ceilings
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
@@ -132,7 +131,7 @@ are already included in `output_tokens` and are not added again. Batch rates
 are excluded. Cost is computed from logged usage, never from token estimates.
 
 Batch direct-prompt submission is **deferred and out of scope for Phase 2**
-(my decision, 2026-10-31). All runs use synchronous list-price accounting
+(decision, 2026-10-31). All runs use synchronous list-price accounting
 (`pricing_basis: "list_sync"`); the design's batch path remains a later-phase
 item and is not mixed into the Phase-2 cost basis.
 
