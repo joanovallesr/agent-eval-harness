@@ -19,8 +19,8 @@ use list-price token costs; actual spend is reported separately.
 |---|---|---|---|
 | phase2_mini_smoke (20 cases × 3 arms) | $1.00 | $0.073719 | list_sync; mini/smoke only; excluded from headline results |
 | phase3_pilot (30 cases × 3 arms, k=1) | $1.00 | $0.095948 | list_sync; pilot only; excluded from headline results; 30 non-candidate tools |
-| phase3_effort_slices (incomplete) | $1.00 | $0.994453 | list_sync; 6 Haiku configs × 2 arms + Sonnet api_default complete; Sonnet max 94/100 before cap |
-| dev_spend | — | — | set from pilot |
+| phase3_effort_slices | $1.03 | $1.023421 | list_sync; Haiku shared = `low`; Sonnet = `api_default`; 100 cases/config; selected by the §2 pure functions |
+| dev_spend | — | — | set from Stage 2 chosen-effort rates |
 | judge_spend (GPT-6 Luna) | — | — | labels + calibration |
 | multistep_traces (haiku-agent + sonnet-agent) | — | — | ~30 tasks × 2 models |
 | opus_spot (~50 cases, optional) | — | — | only if budget allows |
@@ -31,10 +31,10 @@ use list-price token costs; actual spend is reported separately.
 Phase 3 offline tooling (Task 0 resume fix + Task A sampling/analysis/effort
 plumbing) completed with **$0.000000** model spend. The Stage 1 pilot then
 completed under its **$1.00** ceiling with **$0.095948** actual list-price
-spend. Stage 2 then spent **$0.994453** and hit its **$1.00** ceiling with
-Sonnet `max` at 94/100 cases; the six remaining cases were not run. The ledger
-total now stands at **$1.164120**. Stage 2 is not complete; no Stage 3 work has
-started.
+spend. Stage 2 was resumed under the owner-approved **$1.03** ceiling and
+completed: **$1.023421** actual list-price spend. The ledger total now stands at
+**$1.193088**. Chosen efforts: Haiku shared = **`low`**; Sonnet = **`api_default`**.
+No Stage 3 work has run; the Stage 3 dev-sample proposal is pending approval.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

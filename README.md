@@ -22,7 +22,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 3 Stage 2 effort slices incomplete at the $1.00 ceiling
+## Status: Phase 3 Stage 2 complete; Stage 3 proposal pending approval
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -37,10 +37,11 @@ variance components and §7 sizing, and effort plumbing. The Stage 1 pilot ran
 on 30 shared non-candidate-tool cases at k=1 for **$0.095948** total; those
 numbers are `pilot` only and excluded from headline results. The aggregate
 pilot list-price cost ratio was **0.0532**, clearing the pre-set 0.10 gate.
-Stage 2 effort slices ran all six Haiku configurations and Sonnet
-`api_default`; Sonnet `max` reached **94/100** cases before the **$1.00**
-Stage-2 ceiling stopped it. Stage 2 is therefore not complete. No
-`docs/PRE_REGISTRATION.md` exists.
+Stage 2 effort slices completed under the owner-approved **$1.03** ceiling at
+**$1.023421**. The §2 selection functions chose Haiku shared = **`low`** and
+Sonnet = **`api_default`**. The Sonnet choice rests on a one-case margin over
+`max` and is recorded as noise-level evidence. No Stage 3 run has started and
+no `docs/PRE_REGISTRATION.md` exists.
 
 ## Layout
 
