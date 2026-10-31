@@ -22,13 +22,14 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 2 code-ready, live gate pending
+## Status: Phase 2 mini-set smoke complete
 
-The mini-set, tool schemas, agent loop, direct arms, and harness skeleton are
-implemented and pass offline tests. The measurable Phase-2 gate — all three
-arms running end-to-end on the mini-set — is **awaiting the owner's explicit
-"go"**. Model IDs and Anthropic list prices are not yet verified/pinned in the
-repo, so a live run is blocked until explicit configuration is supplied.
+The mini-set, tool schemas, agent loop, direct arms, and harness are
+implemented and pass offline tests. The three-arm live smoke run completed on
+the 20-case mini-set at a total list-price cost of **$0.073719**; those numbers
+are `mini/smoke` only and are excluded from every headline result. Model IDs
+are verified/pinned in `src/eval/config.py` and list prices are pinned in
+`config/pricing.list_sync.2026-10-31.json`. Phase 3 has not started.
 
 ## Layout
 
@@ -78,13 +79,13 @@ PYTHONPATH=src python -m eval.mini_set --path data/miniset.jsonl
 # Show the run plan without making any API call.
 PYTHONPATH=src python -m eval.harness --subset data/miniset.jsonl --dry-run
 
-# Live run (only after the owner pins model IDs/prices and says "go"):
+# Live run:
 PYTHONPATH=src python -m eval.harness \
   --subset data/miniset.jsonl \
   --out results \
   --arms all \
   --cost-ceiling 1.00 \
-  --pricing-file /path/to/pinned-pricing.json
+  --pricing-file config/pricing.list_sync.2026-10-31.json
 ```
 
 The harness also supports one arm and a case subset for debugging:
@@ -92,7 +93,8 @@ The harness also supports one arm and a case subset for debugging:
 ```bash
 PYTHONPATH=src python -m eval.harness --subset data/miniset.jsonl \
   --out results --arms haiku-agent --cases mini-001,mini-002 \
-  --cost-ceiling 0.25 --pricing-file /path/to/pinned-pricing.json
+  --cost-ceiling 0.25 \
+  --pricing-file config/pricing.list_sync.2026-10-31.json
 ```
 
 New Phase-2 flags: `--arms` (`all` or a comma-separated list), `--cases`,
@@ -101,22 +103,15 @@ New Phase-2 flags: `--arms` (`all` or a comma-separated list), `--cases`,
 `--no-resume`, and `--dry-run`. The existing `--baseline` flag selects
 `sonnet-direct`; `--gate` remains reserved for Phase 7.
 
-The pricing file is explicit configuration because the repository pins no
-Anthropic list prices:
-
-```json
-{
-  "claude-haiku-5-5": {"input": null, "output": null,
-                        "cache_read": null, "cache_write": null},
-  "claude-sonnet-5-5": {"input": null, "output": null,
-                         "cache_read": null, "cache_write": null}
-}
-```
-
-Replace every null with a verified list price. The harness refuses a live run
-if any selected model has no price, and refuses a priced token class with no
-pinned cache price. Cost is computed from logged usage, never from token
-estimates.
+The pinned pricing document is
+`config/pricing.list_sync.2026-10-31.json`. It records `pricing_basis:
+"list_sync"`, USD per MTok, the verification date, and the two verified model
+IDs. Haiku has a ≤100K-prompt tier and an over-100K tier; the over-100K tier
+deliberately has **no cache-write rate**. The loader does not invent one: if a
+cache-write token is ever billed in that tier, cost calculation raises
+`PricingError` instead. No prompt caching is sent in Phase 2. Thinking tokens
+are already included in `output_tokens` and are not added again. Batch rates
+are excluded. Cost is computed from logged usage, never from token estimates.
 
 Batch direct-prompt submission is **deferred and out of scope for Phase 2**
 (owner decision 2026-10-31). All runs use synchronous list-price accounting

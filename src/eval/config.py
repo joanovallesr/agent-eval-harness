@@ -1,9 +1,9 @@
 """Explicit Phase-2 configuration.
 
-Nothing here is a pre-registration. Model IDs are the **starting points**
-recorded in ``docs/EVAL_DESIGN.md`` §2, not verified/pinned IDs, and no
-Anthropic list prices are recorded anywhere in the repository. A live run is
-blocked until the owner supplies verified IDs and explicit list prices.
+Nothing here is a pre-registration. The two model IDs are pinned as verified
+for Phase 2 on 2026-10-31 and are recorded in every results file. The pinned
+list-price file is ``config/pricing.list_sync.2026-10-31.json``; a live run
+still requires ``--pricing-file`` explicitly.
 
 Effort is recorded as provisional metadata. Phase 2 transmits **no** effort
 parameter: all three arms record ``api_default``. Final effort selection is
@@ -23,7 +23,8 @@ MODEL_IDS = {
     "haiku": "claude-haiku-5-5",
     "sonnet": "claude-sonnet-5-5",
 }
-MODEL_ID_STATUS = "unverified starting point from docs/EVAL_DESIGN.md section 2"
+MODEL_IDS_VERIFIED = True
+MODEL_ID_STATUS = "verified 2026-10-31; list_sync pricing pinned in config/"
 
 ARMS = ("haiku-agent", "haiku-direct", "sonnet-direct")
 ARM_MODEL_KEYS = {
@@ -111,6 +112,7 @@ __all__ = [
     "MINI_SET_LABEL",
     "MINI_SET_PATH",
     "MODEL_IDS",
+    "MODEL_IDS_VERIFIED",
     "MODEL_ID_STATUS",
     "PROMPT_VERSION",
     "PricingError",

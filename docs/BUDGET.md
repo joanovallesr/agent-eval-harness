@@ -17,6 +17,7 @@ use list-price token costs; actual spend is reported separately.
 
 | Line | Ceiling | Actual | Notes |
 |---|---|---|---|
+| phase2_mini_smoke (20 cases × 3 arms) | $1.00 | $0.073719 | list_sync; mini/smoke only; excluded from headline results |
 | pilot (~30 cases/arm, k=1) | $1.00 | — | pure measurement |
 | effort_slices | — | — | set from pilot |
 | dev_spend | — | — | set from pilot |
@@ -26,6 +27,10 @@ use list-price token costs; actual spend is reported separately.
 | ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
 | reserve (1 aborted+resumed test run) | — | — | most expensive arm |
 | **test_spend** | — | — | `C · n_t · k · measured_cost/case` |
+
+Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
+counts against the $20 hard cap; subtract it alongside the inequality terms
+when checking remaining budget.
 
 Second line of defense: a provider-console spend limit (set up in Phase 2).
 The harness per-run ceiling is the third.

@@ -1,0 +1,35 @@
+{
+  "currency": "USD",
+  "unit": "per_MTok",
+  "pricing_basis": "list_sync",
+  "verified_date": "2026-10-31",
+  "source": "Anthropic official pricing page, checked 2026-10-31",
+  "models": {
+    "claude-haiku-5-5": {
+      "tiers": [
+        {
+          "max_prompt_tokens": 100000,
+          "input": 0.1,
+          "output": 0.5,
+          "cache_write_5m": 0.125,
+          "cache_write_1h": 0.2,
+          "cache_read": 0.01
+        },
+        {
+          "max_prompt_tokens": null,
+          "input": 0.5,
+          "output": 2.5,
+          "cache_read": 0.05
+        }
+      ]
+    },
+    "claude-sonnet-5-5": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_write_5m": 2.5,
+      "cache_write_1h": 4.0,
+      "cache_read": 0.1
+    }
+  },
+  "notes": "Thinking tokens bill at the output rate and are already included in output_tokens; do not add thinking_tokens on top. Batch rates excluded (list_sync basis). The Haiku over-100K tier deliberately has no cache-write rate; no prompt caching is sent."
+}

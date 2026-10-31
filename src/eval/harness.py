@@ -55,6 +55,7 @@ from eval.config import (
     MATCH_SPEC_VERSION,
     MINI_SET_DEV_VS_FINAL,
     MINI_SET_LABEL,
+    MODEL_IDS_VERIFIED,
     MODEL_ID_STATUS,
     PROMPT_VERSION,
     effort_for,
@@ -93,6 +94,7 @@ RESULTS_CONTRACT = {
         "abort_reason",
         "arm",
         "model_id",
+        "model_ids_verified",
         "model_id_status",
         "effort",
         "effort_provisional",
@@ -437,6 +439,7 @@ def _run_block(
         "abort_reason": abort_reason,
         "arm": arm,
         "model_id": model_id_for(arm),
+        "model_ids_verified": MODEL_IDS_VERIFIED,
         "model_id_status": MODEL_ID_STATUS,
         "effort": effort_for(arm),
         "effort_provisional": EFFORT_PROVISIONAL,
@@ -452,18 +455,13 @@ def _run_block(
     }
 
 
-def _pricing_rows(prices: Mapping[str, TokenPrice]) -> dict[str, dict[str, float | None]]:
+def _pricing_rows(prices: Mapping[str, TokenPrice]) -> dict[str, dict[str, Any]]:
     """Record the exact list prices used, so cost is auditable after the run."""
 
-    rows: dict[str, dict[str, float | None]] = {}
-    for arm, price in prices.items():
-        rows[model_id_for(arm)] = {
-            "input": price.input,
-            "output": price.output,
-            "cache_read": price.cache_read,
-            "cache_write": price.cache_write,
-        }
-    return rows
+    return {
+        model_id_for(arm): price.to_dict()
+        for arm, price in prices.items()
+    }
 
 
 def _arm_config_rows() -> list[dict[str, Any]]:
@@ -471,6 +469,7 @@ def _arm_config_rows() -> list[dict[str, Any]]:
         {
             "arm": arm,
             "model_id": model_id_for(arm),
+            "model_ids_verified": MODEL_IDS_VERIFIED,
             "model_id_status": MODEL_ID_STATUS,
             "effort": effort_for(arm),
             "effort_provisional": EFFORT_PROVISIONAL,
@@ -499,6 +498,7 @@ def _write_outputs(
     pricing_rows: Mapping[str, Mapping[str, Any]] | None = None,
     resume_history: Sequence[Mapping[str, Any]] | None = None,
     selected_arms: Sequence[str] | None = None,
+    pricing_path: str | None = None,
 ) -> None:
     combined_arms: dict[str, Any] = {}
     for arm in ARMS:
@@ -540,6 +540,7 @@ def _write_outputs(
         "match_spec_version": MATCH_SPEC_VERSION,
         "prompt_version": PROMPT_VERSION,
         "pricing_basis": "list_sync",
+        "pricing_path": pricing_path,
         "pricing_per_mtok": dict(pricing_rows or {}),
         "max_tokens": MAX_TOKENS,
         "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
@@ -560,6 +561,7 @@ def _write_outputs(
             "abort_reason": abort_reason,
             "total_cost_usd": total_cost,
             "pricing_basis": "list_sync",
+            "pricing_path": pricing_path,
             "pricing_per_mtok": dict(pricing_rows or {}),
             "max_tokens": MAX_TOKENS,
             "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
@@ -584,6 +586,7 @@ def _write_outputs(
                 "total_cost_usd": total_cost,
                 "repeats": repeats,
                 "pricing_basis": "list_sync",
+                "pricing_path": pricing_path,
                 "pricing_per_mtok": dict(pricing_rows or {}),
                 "max_tokens": MAX_TOKENS,
                 "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
@@ -629,6 +632,7 @@ def run_arms(
     repeats: int = 1,
     run_id: str | None = None,
     resume: bool = True,
+    pricing_path: str | None = None,
 ) -> dict[str, Any]:
     """Run selected arms over the mini-set and write traces + results JSON.
 
@@ -749,6 +753,7 @@ def run_arms(
             "match_spec_version": MATCH_SPEC_VERSION,
             "prompt_version": PROMPT_VERSION,
             "pricing_basis": "list_sync",
+            "pricing_path": pricing_path,
             "pricing_per_mtok": pricing_rows,
             "max_tokens": MAX_TOKENS,
             "max_tokens_provisional": MAX_TOKENS_PROVISIONAL,
@@ -785,6 +790,7 @@ def run_arms(
             total_cost=total_cost,
             cases=cases,
             pricing_rows=pricing_rows,
+            pricing_path=pricing_path,
             resume_history=resume_history,
             selected_arms=selected_arms,
         )
@@ -894,6 +900,7 @@ def run_arms(
         total_cost=total_cost,
         cases=cases,
         pricing_rows=pricing_rows,
+        pricing_path=pricing_path,
         resume_history=resume_history,
         selected_arms=selected_arms,
     )
@@ -928,6 +935,7 @@ def run_subset(
     repeats: int = 1,
     run_id: str | None = None,
     resume: bool = True,
+    pricing_path: str | None = None,
 ) -> dict[str, Any]:
     """Run one arm over one subset and return its summary.
 
@@ -947,6 +955,7 @@ def run_subset(
         repeats=repeats,
         run_id=run_id,
         resume=resume,
+        pricing_path=pricing_path,
     )
     return result["arms"][selected[0]]["summary"]
 
@@ -1079,6 +1088,7 @@ def main() -> None:
             repeats=args.repeats,
             run_id=args.run_id,
             resume=not args.no_resume,
+            pricing_path=args.pricing_file,
         )
     except RunAborted as exc:
         print(json.dumps({"error": str(exc), **exc.result}, indent=2))
