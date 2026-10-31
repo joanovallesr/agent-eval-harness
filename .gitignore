@@ -17,6 +17,7 @@ state/
 data/*.jsonl
 data/*.json
 !data/README.md
+!data/miniset.jsonl
 baselines/*.json
 !baselines/.gitkeep
 

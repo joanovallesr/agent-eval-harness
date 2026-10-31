@@ -1,8 +1,10 @@
 # Data
 
 Benchmark subsets live here. They are **gitignored** — large files and frozen
-splits shouldn't churn in the repo. What's committed instead: the revision
-pin, the checksums, and the license/terms verdict.
+splits shouldn't churn in the repo — with one explicit exception:
+`miniset.jsonl`, the hand-written Phase-2 smoke set, is tracked. What's
+committed otherwise: the revision pin, the checksums, and the license/terms
+verdict.
 
 ## Sources
 

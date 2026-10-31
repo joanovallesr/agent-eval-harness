@@ -22,29 +22,38 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: in progress
+## Status: Phase 2 code-ready, live gate pending
 
-This is a skeleton. The agent, harness, and judge are stubbed with TODOs; the design is
-written down in `docs/EVAL_DESIGN.md`. Implementation order is in `PROJECT_PLAN.md`.
+The mini-set, tool schemas, agent loop, direct arms, and harness skeleton are
+implemented and pass offline tests. The measurable Phase-2 gate — all three
+arms running end-to-end on the mini-set — is **awaiting the owner's explicit
+"go"**. Model IDs and Anthropic list prices are not yet verified/pinned in the
+repo, so a live run is blocked until explicit configuration is supplied.
 
 ## Layout
 
 ```
 agent-eval-harness/
 ├── src/agent/        # raw-API tool-using agent
-│   ├── agent.py      # main loop: prompt -> tools -> budget -> answer
-│   └── tools.py      # tool definitions (JSON schemas + implementations)
+│   ├── agent.py      # loop: prompt -> tool_use -> schema validation -> repair
+│   ├── prompts.py    # frozen Phase-2 system + repair prompts
+│   └── tools.py      # mini-set JSON schemas (no tool execution in Phase 2)
 ├── src/eval/         # evaluation harness
-│   ├── harness.py    # run loop: cases -> agent -> trace -> score
+│   ├── harness.py    # run loop: cases -> arm -> trace -> score -> results
+│   ├── mini_set.py   # mini-set loader + schema/scorer validation
+│   ├── config.py     # explicit model/effort/prompt configuration
 │   ├── scorer.py     # schema-free per-case matcher (MATCH_SPEC v1.1)
+│   ├── metrics.py    # cost from logged usage, CIs, latency
 │   ├── judge.py      # LLM-as-judge (different model family from the agent)
-│   ├── metrics.py    # pass@k, cost/task, latency, accuracy
 │   └── calibration.py# judge calibration vs human labels (Cohen's kappa)
-├── tests/            # pytest: scorer pair tests + harness smoke tests
+├── tests/            # pytest: scorer pairs, agent loop, harness, mini-set
 ├── scripts/
 │   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
 │   ├── audit_required_filter.py  # final required-args rule audit
 │   └── audit_variance_m.py   # §7 m/u usable-cases sensitivity
+├── data/
+│   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
+│   └── README.md     # revision pin, license draft, split notes
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
@@ -53,18 +62,75 @@ agent-eval-harness/
 │   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit for owner sign-off
 │   ├── BUDGET.md           # $20 ledger and ceilings
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
-├── data/             # benchmark subsets live here (gitignored, see data/README.md)
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
 ```
 
-## Quickstart (once implemented)
+## Quickstart (Phase 2)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# request access to the gated xLAM-60k dataset, then:
-python -m src.eval.harness --subset data/xlam60k_dev.jsonl
+
+# Validate the mini-set offline: every gold call is offered, schema-valid,
+# and accepted by the Phase-1 scorer.
+PYTHONPATH=src python -m eval.mini_set --path data/miniset.jsonl
+
+# Show the run plan without making any API call.
+PYTHONPATH=src python -m eval.harness --subset data/miniset.jsonl --dry-run
+
+# Live run (only after the owner pins model IDs/prices and says "go"):
+PYTHONPATH=src python -m eval.harness \
+  --subset data/miniset.jsonl \
+  --out results \
+  --arms all \
+  --cost-ceiling 1.00 \
+  --pricing-file /path/to/pinned-pricing.json
 ```
+
+The harness also supports one arm and a case subset for debugging:
+
+```bash
+PYTHONPATH=src python -m eval.harness --subset data/miniset.jsonl \
+  --out results --arms haiku-agent --cases mini-001,mini-002 \
+  --cost-ceiling 0.25 --pricing-file /path/to/pinned-pricing.json
+```
+
+New Phase-2 flags: `--arms` (`all` or a comma-separated list), `--cases`,
+`--repeats`, `--cost-ceiling` (required for a live run), `--pricing-file`
+(model ID -> per-MTok list prices), `--run-id` (resume an interrupted run),
+`--no-resume`, and `--dry-run`. The existing `--baseline` flag selects
+`sonnet-direct`; `--gate` remains reserved for Phase 7.
+
+The pricing file is explicit configuration because the repository pins no
+Anthropic list prices:
+
+```json
+{
+  "claude-haiku-5-5": {"input": null, "output": null,
+                        "cache_read": null, "cache_write": null},
+  "claude-sonnet-5-5": {"input": null, "output": null,
+                         "cache_read": null, "cache_write": null}
+}
+```
+
+Replace every null with a verified list price. The harness refuses a live run
+if any selected model has no price, and refuses a priced token class with no
+pinned cache price. Cost is computed from logged usage, never from token
+estimates.
+
+Batch direct-prompt submission is **not implemented** in Phase 2. All runs use
+synchronous list-price accounting (`pricing_basis: "list_sync"`); the design's
+batch path has no pinned batch prices here, so it is left for a later phase
+rather than mixed into the synchronous cost basis.
+
+Results are written under the gitignored `results/` tree: case checkpoints,
+per-arm `results.json` files, a combined `results.json`, and `summary.json`.
+Every Phase-2 record is labelled `mini/smoke` / `mini_smoke`; these numbers are
+excluded from headline results. Resuming with `--run-id` requires the same
+arms and case selection, so completed checkpoints are never reordered or
+rescored. The run metadata records the exact list prices used and labels
+`max_tokens` as provisional until it is pinned.
+
 
 ## Ground rules (from the resume quest)
 
