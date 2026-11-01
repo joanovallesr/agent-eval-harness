@@ -2,7 +2,8 @@
 
 A tool-using agent built on the **raw Anthropic API** (no agent framework), scored on a
 **public agent-benchmark subset**, with an **LLM judge whose calibration is measured**
-and a **CI gate** that fails when a prompt change hurts the score.
+and an **advisory CI eval gate** that reports score changes without ever failing a
+build.
 
 ## Why this exists
 
@@ -22,10 +23,12 @@ portfolios skip. This project proves it:
    negative result. Phase 5's report-half κ is undefined because both label
    sets used only `correct`; that miss is stated in
    `docs/PHASE5_CALIBRATION.md`.
-4. **CI gate** — offline checks required from day one; the LLM-backed gate
-   starts advisory and is promoted once its false-alarm rate is measured.
+4. **CI gate, advisory by design** — Ruff and the offline pytest suite are
+   required. The Phase-7 eval gate is scorer-based and mini-set only, never uses
+   a judge verdict, and reports its result in a PR comment instead of failing the
+   build.
 
-## Status: Phase 6 complete (held-out run and report); Phase 5 judge miss reported
+## Status: Phase 7 advisory gate implemented; Phase 6 held-out run and report complete; Phase 5 judge miss reported
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -68,6 +71,16 @@ agreement 30/30 and n = 30 report traces over 15 tasks. Judge spend is
 **$0.020836**; Phase 5 total is **$1.307851** against the $1.50 ceiling. See
 `docs/PHASE5_CALIBRATION.md`.
 
+Phase 7's advisory CI gate is implemented. Because the Phase 5 judge is not
+calibrated (κ undefined, ship rule not met), the gate uses **no judge verdicts
+anywhere**. It runs only the tracked 20-case mini-set through `haiku-agent` at
+effort `low`, `max_tokens` 1024, MATCH_SPEC v1.1 scoring, and the pinned
+`list_sync` prices. It posts one PR comment with exact and partial scores, a
+diff against a committed baseline, per-case changes by id, and the run's
+list-price cost. It never fails a build, never runs the held-out test split or
+any dev/test sample, and stops at a hard **$0.25** per-run ceiling. The first
+real CI run happens when I push and open a pull request myself.
+
 ## Layout
 
 ```
@@ -88,7 +101,8 @@ agent-eval-harness/
 │   ├── metrics.py    # cost, paired intervals, variance components, §7 sizing
 │   ├── analysis.py   # Phase-3 analysis dry run over a results directory
 │   ├── judge.py      # LLM-as-judge (different model family from the agent)
-│   └── calibration.py# judge calibration vs human labels (Cohen's kappa)
+│   ├── calibration.py# judge calibration vs human labels (Cohen's kappa)
+│   └── gate.py       # advisory Phase-7 gate: comment + baseline diff
 ├── tests/            # pytest: scorer pairs, agent loop, harness, mini-set
 ├── scripts/
 │   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
@@ -96,11 +110,14 @@ agent-eval-harness/
 │   ├── audit_variance_m.py   # §7 m/u usable-cases sensitivity
 │   ├── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
 │   ├── phase6_report.py      # one-source Phase-6 analysis + doc generator
-│   └── phase6_cache_monitor.py # real-time nonzero-cache stop guard
+│   ├── phase6_cache_monitor.py # real-time nonzero-cache stop guard
+│   └── eval_gate.py          # Phase-7 gate CLI + local dry-run/baseline writer
 ├── data/
 │   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
 │   ├── multistep.jsonl # tracked hand-written Phase-5 set (30 tasks)
 │   └── README.md     # revision pin, license draft, split notes
+├── baselines/
+│   └── phase7-miniset-haiku-low.json # committed gate baseline (manual)
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
@@ -114,7 +131,9 @@ agent-eval-harness/
 │   ├── PHASE5_CALIBRATION.md # Phase-5 judge calibration and κ result
 │   ├── RESULTS.md          # Phase-6 held-out results (generated)
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
-└── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
+└── .github/workflows/
+    ├── ci.yml               # Ruff + pytest; advisory eval gate on PRs
+    └── eval-gate-comment.yml # fixed fork skip notice (read-only PR token)
 ```
 
 ## Quickstart (Phase 2)
@@ -152,7 +171,8 @@ New Phase-2 flags: `--arms` (`all` or a comma-separated list), `--cases`,
 `--repeats`, `--cost-ceiling` (required for a live run), `--pricing-file`
 (model ID -> per-MTok list prices), `--run-id` (resume an interrupted run),
 `--no-resume`, and `--dry-run`. The existing `--baseline` flag selects
-`sonnet-direct`; `--gate` remains reserved for Phase 7.
+`sonnet-direct`. The advisory Phase-7 gate is a separate command
+(`scripts/eval_gate.py`), not a harness flag; it never fails a build.
 
 The pinned pricing document is
 `config/pricing.list_sync.2026-10-31.json`. It records `pricing_basis:
@@ -269,6 +289,75 @@ PYTHONPATH=src python -m eval.labeling \
 
 The packet contains no model identity, cost, token count, or judge output.
 The private mapping stays outside the packet.
+
+## Phase 7 — advisory CI eval gate
+
+The gate is deliberately narrower than the original Phase-7 sketch. Because
+the Phase 5 judge is not calibrated, it uses **no judge verdicts**. It is
+scorer-based, mini-set only, and advisory: the eval step always exits 0. A
+missing key, a failed run, or a cost-ceiling stop is reported in the PR
+comment, never as a red build. Ruff and the full pytest suite remain required
+in the separate `test` job and still fail normally.
+
+On a pull request, `.github/workflows/ci.yml`:
+
+1. runs Ruff and the full offline pytest suite;
+2. runs `data/miniset.jsonl` (20 cases) through `haiku-agent` at effort `low`,
+   `max_tokens` 1024, MATCH_SPEC v1.1 scoring, and
+   `config/pricing.list_sync.2026-10-31.json`; and
+3. posts or updates one PR comment with exact and partial scores, the diff
+   against `baselines/phase7-miniset-haiku-low.json`, per-case changes by id,
+   and the run's list-price cost.
+
+The gate never runs the held-out test split and never re-runs a dev or test
+sample. The scoring path is the existing scorer; the judge is not called.
+
+**Secret and forks.** The workflow reads `ANTHROPIC_API_KEY` from GitHub
+Actions secrets. I add that secret in repository settings myself; the code only
+checks whether it is present and never prints it. Fork pull requests do not
+receive repository secrets, so the eval step skips with a clear notice in the
+comment and the workflow still succeeds. Fork `pull_request` tokens are also
+read-only, so a companion `workflow_run` job in the base repository posts a
+fixed skip notice for forks. It never checks out or runs pull-request code and
+never trusts PR-authored comment text.
+
+**Cost guard.** The hard per-run ceiling is **$0.25**, enforced by the
+harness's existing ceiling mechanism. The actual list-price cost is printed in
+the comment. If the ceiling is hit, the comment says so and reports any partial
+results. For scale, the Phase 2 all-arms mini-set run cost $0.073719 and this
+single-arm gate baseline cost $0.003351.
+
+**Local dry-run (no API call).** Render the exact comment from a saved results
+file:
+
+```bash
+PYTHONPATH=src:scripts python scripts/eval_gate.py --dry-run \
+  --results results/<run-id>/results.json \
+  --baseline baselines/phase7-miniset-haiku-low.json \
+  --out-comment results/comment.md
+```
+
+**Baseline regeneration is manual.** CI never writes the baseline. To
+regenerate it deliberately, run the gate settings from the committed code,
+then write the baseline and review the diff before committing:
+
+```bash
+set -a; source .env; set +a
+PYTHONPATH=src:scripts python scripts/eval_gate.py \
+  --out results --run-id phase7-baseline-<date> \
+  --out-comment results/phase7-baseline-<date>/comment.md
+
+PYTHONPATH=src:scripts python scripts/eval_gate.py --write-baseline \
+  --results results/phase7-baseline-<date>/results.json \
+  --baseline baselines/phase7-miniset-haiku-low.json --force
+
+git diff baselines/phase7-miniset-haiku-low.json
+```
+
+The baseline records the model id, effort, `max_tokens`, MATCH_SPEC version,
+pricing file, mini-set path and SHA-256, per-case exact/partial scores, and
+list-price cost. The comment marks a run as not comparable when any of those
+differ.
 
 ## Ground rules (from the resume quest)
 

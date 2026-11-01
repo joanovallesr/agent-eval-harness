@@ -134,19 +134,35 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
       A draft bullet is supplied in the Phase 6 report; I place it myself.
 - [x] Measurable: RESULTS.md committed; resume draft supplied.
 
-## Phase 7 — CI gate
-- [x] `.github/workflows/ci.yml` runs Ruff + pytest on every push/PR (offline
-      checks; pair tests are required from Phase 1).
-- [ ] This phase adds only the LLM gate: add an `eval-gate` job that is
-      **advisory-first** (non-blocking) until the false-alarm rate is
-      measured, then promote it to required.
-- [ ] LLM gate: 50-case dev subset, Haiku arms, tolerance band from repeated
-      unchanged-code runs, rerun-once on failure, everything pinned,
-      reference score in repo, **dedicated key with its own low spend limit**
-      (untrusted PRs can't read repo secrets).
-- [ ] Document the gate's honest sensitivity (smoke detector, not instrument).
-- [ ] Measurable: deliberately broken prompt change fails the gate (test the
-      test) — after the advisory period.
+## Phase 7 — CI gate (advisory in this version)
+- [x] I kept `.github/workflows/ci.yml` running Ruff + the full offline pytest
+      suite on every push/PR (pair tests are required from Phase 1).
+- [x] I added a PR-only `eval-gate` job. It depends on the `test` job, is
+      advisory, and never fails the build. Pytest failures still fail the
+      separate `test` job normally.
+- [x] I changed the gate scope from the original 50-case dev sketch to the
+      tracked 20-case mini-set only: `haiku-agent`, effort `low`, `max_tokens`
+      1024, MATCH_SPEC v1.1 scoring, and the pinned `list_sync` prices.
+- [x] I made the gate use **no judge verdicts**. Phase 5's κ is undefined and
+      the ship rule is not met, so the gate is scorer-based.
+- [x] I made it create or update one PR comment with exact and partial scores,
+      a diff against the committed baseline, per-case changes by id, and the
+      list-price cost. A missing key, failed run, or cost-ceiling stop is
+      reported in the comment.
+- [x] I set a hard **$0.25** per-run ceiling via the existing harness ceiling
+      mechanism; actual cost is printed in the comment.
+- [x] I committed the baseline at `baselines/phase7-miniset-haiku-low.json`
+      with the model id, effort, `max_tokens`, MATCH_SPEC version, pricing
+      file, mini-set SHA-256, per-case scores, and cost. Regeneration is a
+      manual, documented act; CI never writes it.
+- [x] I added a local dry-run that renders the exact comment from a saved
+      results file, with offline tests for the formatter and baseline diff.
+- [x] I documented the honest scope: advisory, scorer-based, mini-set only, no
+      judge, and not a headline result (`README.md`).
+- [ ] Promotion beyond advisory is a later decision; it needs a measured
+      false-alarm rate and is not part of this version.
+- [ ] The deliberately broken prompt test ("test the test") waits for that
+      promotion decision.
 
 ## Phase 8 — Dashboard (late, time-boxed)
 - [ ] After real dev results exist: static Next.js export on Vercel, renders
