@@ -21,8 +21,8 @@ use list-price token costs; actual spend is reported separately.
 | phase3_pilot (30 cases × 3 arms, k=1) | $1.00 | $0.095948 | list_sync; pilot only; excluded from headline results; 30 non-candidate tools |
 | phase3_effort_slices | $1.03 | $1.023421 | list_sync; Haiku shared = `low`; Sonnet = `api_default`; 100 cases/config; selected by the §2 pure functions |
 | phase3_dev (30 tools × 12 cases × 3 arms, k=1) | $1.50 | $1.264953 | list_sync; dev only; Haiku `low`, Sonnet `api_default`; 360 cases |
-| judge_spend (GPT-6 Luna) | — | — | labels + calibration |
-| multistep_traces (haiku-agent + sonnet-agent) | — | — | ~30 tasks × 2 models |
+| judge_spend (GPT-6 Luna) | — | — | not run yet; Part 2; must fit inside the Phase 5 ceiling |
+| multistep_traces (haiku-agent + sonnet-agent) | $1.50 (Phase 5 total) | $1.287014 | list_sync; 60 final traces plus one smoke and two superseded runs; see `docs/PHASE5_MULTISTEP.md` |
 | opus_spot (~50 cases, optional) | — | — | only if budget allows |
 | ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
 | reserve (1 aborted+resumed test run) | — | — | most expensive arm |
@@ -42,6 +42,22 @@ spend **$3.288878**, reserve
 **$5.972325**, later-phase allowance **$2.000000**, and **$6.280757** of slack
 against the $20 hard cap. These are projections, not spend; the ledger above
 stays on actuals.
+
+Phase 5 Part 1 trace generation is complete. The final 60-trace run cost
+**$0.414715**; a single-task smoke run and two superseded full runs cost
+**$0.872299** more because I fixed fixture-matching defects and regenerated the
+set. Phase 5 trace spend is **$1.287014** against the **$1.50** Phase 5
+ceiling, leaving **$0.212986** for judge calls. No judge spend has occurred.
+With Phase 5 traces included, the ledger total is **$3.745055**. On actuals so
+far the test inequality is
+
+```text
+20.00 − 2.458041 (through Phase 3) − 1.287014 (Phase 5 traces)
+      − 0.000000 (judge) − 5.972325 (reserve) = 10.282620 ≥ 3.288878  ✓
+```
+
+The pre-registration's $2.000000 later-phase allowance is still the planning
+figure; this ledger records the $1.287014 actually spent so far against it.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

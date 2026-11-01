@@ -23,7 +23,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 4 complete; test run not started
+## Status: Phase 5 Part 1 complete; human labels pending; test run not started
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -51,16 +51,27 @@ the Stage 4 analysis dry run; the aggregate report is
 tagged `pre-registration-v1`, and the test sample is materialized as 936
 cases (8 tools × 117). The test run itself is Phase 6 and has not started.
 
+Phase 5 Part 1 is complete: the 30-task hand-written multi-step set with
+scripted mock results is tracked in `data/multistep.jsonl`, and the final
+60-trace run (two loop arms, no direct arm) completed with no truncations,
+format failures, or fixture misses. Trace spend is **$1.287014** against the
+$1.50 Phase 5 ceiling; the blind human-labeling packet is in gitignored
+results storage. Part 2 (judge calibration) starts only after my labels exist.
+
 ## Layout
 
 ```
 agent-eval-harness/
 ├── src/agent/        # raw-API tool-using agent
 │   ├── agent.py      # loop: prompt -> tool_use -> schema validation -> repair
+│   ├── multistep_agent.py  # Phase-5 loop with scripted mock results
+│   ├── multistep_tools.py  # original multi-step tool schemas
 │   ├── prompts.py    # frozen Phase-2 system + repair prompts
 │   └── tools.py      # mini-set JSON schemas (no tool execution in Phase 2)
 ├── src/eval/         # evaluation harness
 │   ├── harness.py    # run loop: cases -> arm -> trace -> score -> results
+│   ├── multistep.py  # multi-step loader, validator, and trace runner
+│   ├── labeling.py   # blind human-labeling packet builder
 │   ├── mini_set.py   # mini-set loader + schema/scorer validation
 │   ├── config.py     # explicit model/effort/prompt configuration
 │   ├── scorer.py     # schema-free per-case matcher (MATCH_SPEC v1.1)
@@ -76,15 +87,18 @@ agent-eval-harness/
 │   └── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
 ├── data/
 │   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
+│   ├── multistep.jsonl # tracked hand-written Phase-5 set (30 tasks)
 │   └── README.md     # revision pin, license draft, split notes
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
-│   ├── PRE_REGISTRATION.md # held-out claim, design, and budget (draft, untagged)
+│   ├── PRE_REGISTRATION.md # held-out claim, design, and budget (tagged)
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
 │   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit (final rule)
 │   ├── BUDGET.md           # $20 ledger and ceilings
+│   ├── MULTISTEP_RUBRIC.md # Phase-5 blind labeling rubric (v1)
+│   ├── PHASE5_MULTISTEP.md # Phase-5 task set, traces, and packet
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
 ```
@@ -214,6 +228,33 @@ read-only decomposition and must not be added again.
 aborted run's own accounting. A resume re-attempts that case; the earlier 0 is
 never inherited. Resuming from a checkpoint is allowed; restarting a run after
 seeing partial results is forbidden.
+
+## Phase 5 multi-step commands
+
+The multi-step set is separate from the pre-registered test. It uses scripted
+mock results and only the two loop arms:
+
+```bash
+# Show the plan without making an API call.
+PYTHONPATH=src python -m eval.multistep --dry-run \
+  --pricing-file config/pricing.list_sync.2026-10-31.json --cost-ceiling 0.90
+
+# Generate traces (resumable; aborted runs are recorded, not deleted).
+set -a; source .env; set +a
+PYTHONPATH=src python -m eval.multistep \
+  --pricing-file config/pricing.list_sync.2026-10-31.json \
+  --cost-ceiling 0.90 --run-id <run-id>
+
+# Build the blind human-labeling packet from a completed run.
+PYTHONPATH=src python -m eval.labeling \
+  --run-dir results/<run-id> --cases data/multistep.jsonl \
+  --packet-dir results/phase5-labeling/packet \
+  --mapping results/phase5-labeling/private/mapping.json \
+  --rubric docs/MULTISTEP_RUBRIC.md
+```
+
+The packet contains no model identity, cost, token count, or judge output.
+The private mapping stays outside the packet.
 
 ## Ground rules (from the resume quest)
 

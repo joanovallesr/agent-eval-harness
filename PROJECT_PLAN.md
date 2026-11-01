@@ -105,13 +105,14 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [x] Measurable: tag exists; test split checksums in `data/README.md`.
 
 ## Phase 5 — Judge calibration (secondary question only)
-- [ ] Multi-step set: ~30 hand-written tasks with deterministic mock tools.
-- [ ] Generate traces: run the loop with both models (`haiku-agent`,
+- [x] Multi-step set: ~30 hand-written tasks with deterministic mock tools.
+- [x] Generate traces: run the loop with both models (`haiku-agent`,
       `sonnet-agent`) on the multi-step set. (No direct arm here — it would
       fail by construction.)
 - [ ] Written rubric, blind labeling (arm hidden), split by task (~15 tune
       tasks / ~15 report tasks), ~15 traces relabeled a week later for the
-      intra-rater ceiling.
+      intra-rater ceiling. (Part 1: rubric written and packet built; my labels
+      are pending.)
 - [ ] One calibration round (one prompt revision, defined up front), time-boxed.
 - [ ] Calendar time-box (e.g. 2 weeks), non-blocking: Phase 6 does not wait
       for Phase 5 — the judge is secondary.
