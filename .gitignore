@@ -22,6 +22,7 @@ data/**/*.json
 data/phase3/
 !data/README.md
 !data/miniset.jsonl
+!data/multistep.jsonl
 baselines/*.json
 !baselines/.gitkeep
 

@@ -16,8 +16,10 @@ verdict.
    Access granted 2026-10-23 (click-through; gated: auto).
 2. **Hand-written mini-set** (`miniset.jsonl`, ~20 tasks) — pipeline smoke
    test and multi-step seed. Excluded from headline numbers.
-3. **Hand-written multi-step set** (`multistep.jsonl`, ~30 tasks, each with
-   deterministic mock tools) — the judge's territory.
+3. **Hand-written multi-step set** (`multistep.jsonl`, 30 tasks, each with
+   deterministic scripted mock tools) — tracked because it is hand-written,
+   not dataset content. It is the judge's territory; see
+   `docs/PHASE5_MULTISTEP.md`.
 
 The xLAM-7b-fc-r checkpoint and the cost-aware-router outcomes were dropped
 from the design in the 2026-10-23 grill (see `docs/EVAL_DESIGN.md`).
