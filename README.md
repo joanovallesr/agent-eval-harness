@@ -1,8 +1,8 @@
 # Agent + Eval Harness
 
 A tool-using agent built on the **raw Anthropic API** (no agent framework), scored on a
-**public agent-benchmark subset**, with a **calibrated LLM judge** and a **CI gate** that
-fails when a prompt change hurts the score.
+**public agent-benchmark subset**, with an **LLM judge whose calibration is measured**
+and a **CI gate** that fails when a prompt change hurts the score.
 
 ## Why this exists
 
@@ -16,10 +16,12 @@ portfolios skip. This project proves it:
    mid-tier model ~20x pricier per token — never called "frontier").
    The locked claim reports the paired accuracy difference as an estimate,
    with cost parity as the only binary rule (95% upper bound ≤ 0.10).
-3. **Calibrated judge, scoped** — an LLM judge from a **different model family**
+3. **Judge calibration, scoped** — an LLM judge from a **different model family**
    (GPT-6 Luna) serves the secondary multi-step question only: blind labels,
    a tune/report split, κ with a confidence interval. A miss is a published
-   negative result.
+   negative result. Phase 5's report-half κ is undefined because both label
+   sets used only `correct`; that miss is stated in
+   `docs/PHASE5_CALIBRATION.md`.
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
@@ -59,7 +61,7 @@ Part 2 is complete: I labeled all 60 traces blind, the judge agreed 30/30 on
 the tune half (no revision justified, prompt v1 frozen) and 30/30 on the
 report half. Both label sets used only `correct`, so Cohen's κ is undefined
 rather than large; the ship rule is a published negative result, with raw
-agreement 30/30 and n = 30 report traces (30 tasks). Judge spend is
+agreement 30/30 and n = 30 report traces over 15 tasks. Judge spend is
 **$0.020836**; Phase 5 total is **$1.307851** against the $1.50 ceiling. See
 `docs/PHASE5_CALIBRATION.md`.
 

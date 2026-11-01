@@ -17,9 +17,11 @@ from eval.calibration import (
     raw_agreement,
 )
 from eval.judge import (
+    JudgeError,
     build_judge_messages,
     judge_trace,
     parse_verdict,
+    run_judge,
 )
 from eval.metrics import TokenPrice
 
@@ -160,6 +162,43 @@ def test_judge_trace_returns_parse_failure_after_retries():
     )
     assert result.status == "parse_failure"
     assert result.label == ""
+
+
+def test_run_judge_stops_before_crossing_the_cumulative_ceiling(tmp_path):
+    packet = tmp_path / "packet"
+    packet.mkdir()
+    (packet / "traces.jsonl").write_text(json.dumps(packet_trace()) + "\n")
+    mapping = tmp_path / "mapping.json"
+    mapping.write_text(
+        json.dumps(
+            {
+                "mapping": [
+                    {
+                        "trace_id": "trace-001",
+                        "split": "report",
+                        "task_id": "ms-001",
+                        "arm": "haiku-agent",
+                    }
+                ]
+            }
+        )
+    )
+    rubric = tmp_path / "RUBRIC.md"
+    rubric.write_text("# Rubric")
+    client = FakeOpenAI([])
+    with pytest.raises(JudgeError):
+        run_judge(
+            packet,
+            mapping,
+            rubric,
+            tmp_path / "out.jsonl",
+            split="report",
+            client=client,
+            price=PRICE,
+            cost_ceiling=0.01,
+            prior_cost_usd=0.0095,
+        )
+    assert not client.chat.completions.calls
 
 
 def test_analyse_joins_split_and_arm(tmp_path):

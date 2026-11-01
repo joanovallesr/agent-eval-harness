@@ -21,7 +21,7 @@ use list-price token costs; actual spend is reported separately.
 | phase3_pilot (30 cases × 3 arms, k=1) | $1.00 | $0.095948 | list_sync; pilot only; excluded from headline results; 30 non-candidate tools |
 | phase3_effort_slices | $1.03 | $1.023421 | list_sync; Haiku shared = `low`; Sonnet = `api_default`; 100 cases/config; selected by the §2 pure functions |
 | phase3_dev (30 tools × 12 cases × 3 arms, k=1) | $1.50 | $1.264953 | list_sync; dev only; Haiku `low`, Sonnet `api_default`; 360 cases |
-| judge_spend (GPT-6 Luna) | $0.212986 (remaining Part 1 trace budget) | $0.020836 | list_sync judge pricing `config/pricing.judge.2026-10-23.json`; 76 logged calls; one failed request has no usage record; see `docs/PHASE5_CALIBRATION.md` |
+| judge_spend (GPT-6 Luna) | $0.212986 (remaining Part 1 trace budget) | $0.020836 | list_sync judge pricing `config/pricing.judge.2026-10-23.json`; 76 completed calls; one failed request has no usage record; see `docs/PHASE5_CALIBRATION.md` |
 | multistep_traces (haiku-agent + sonnet-agent) | $1.50 (Phase 5 total) | $1.287014 | list_sync; 60 final traces plus one smoke and two superseded runs; see `docs/PHASE5_MULTISTEP.md` |
 | opus_spot (~50 cases, optional) | — | — | only if budget allows |
 | ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
@@ -59,7 +59,9 @@ the ledger total is **$3.765892**. On actuals so far the test inequality is
 
 The pre-registration's $2.000000 later-phase allowance is still the planning
 figure; this ledger records the $1.307851 actually spent so far against it,
-leaving $0.692149 of that allowance unused.
+leaving $0.692149 of that allowance unused. Totals are computed from unrounded
+run costs; the displayed components are rounded to six decimals, so adding the
+displayed terms can differ from the displayed total by $0.000001.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

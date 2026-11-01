@@ -317,8 +317,14 @@ def run_judge(
     model: str = JUDGE_MODEL_ID,
     prompt_version: str = JUDGE_PROMPT_VERSION,
     cost_ceiling: float | None = None,
+    prior_cost_usd: float = 0.0,
 ) -> dict[str, Any]:
-    """Judge every packet trace in one split, resuming completed rows."""
+    """Judge every packet trace in one split, resuming completed rows.
+
+    ``prior_cost_usd`` is spend outside this output file (earlier judge runs).
+    The ceiling guard reserves the largest observed call cost, or $0.001 on the
+    first call, before each request.
+    """
 
     packet_dir = Path(packet_dir)
     out_path = Path(out_path)
@@ -338,6 +344,7 @@ def run_judge(
         if row.get("status") == "completed" and row.get("label")
     }
     total_cost = sum(float(row.get("cost_usd", 0.0) or 0.0) for row in existing)
+    lifetime_cost = prior_cost_usd + total_cost
     max_call_cost = max(
         (float(row.get("cost_usd", 0.0) or 0.0) for row in existing),
         default=0.0,
@@ -346,14 +353,13 @@ def run_judge(
     for trace_id in selected:
         if trace_id in done:
             continue
-        if cost_ceiling is not None:
-            if total_cost >= cost_ceiling or (
-                max_call_cost > 0 and total_cost + max_call_cost >= cost_ceiling
-            ):
-                raise JudgeError(
-                    f"judge cost ceiling reached before {trace_id}: "
-                    f"${total_cost:.6f} >= ${cost_ceiling:.6f}"
-                )
+        reserve = max(max_call_cost, 0.001)
+        if cost_ceiling is not None and lifetime_cost + reserve >= cost_ceiling:
+            raise JudgeError(
+                f"judge cost ceiling reached before {trace_id}: "
+                f"${lifetime_cost:.6f} + ${reserve:.6f} >= "
+                f"${cost_ceiling:.6f}"
+            )
         result = judge_trace(
             traces[trace_id],
             rubric,
@@ -367,6 +373,7 @@ def run_judge(
         rows.append(row)
         _write_jsonl(out_path, rows)
         total_cost += result.cost_usd
+        lifetime_cost += result.cost_usd
         max_call_cost = max(max_call_cost, result.cost_usd)
         if result.status != "completed":
             raise JudgeError(
@@ -381,6 +388,7 @@ def run_judge(
         "n_selected": len(selected),
         "n_completed": len(completed),
         "total_cost_usd": total_cost,
+        "lifetime_cost_usd": lifetime_cost,
         "prompt_version": prompt_version,
         "model_id": model,
         "out_path": str(out_path),
@@ -404,6 +412,12 @@ def main() -> None:
     parser.add_argument("--prompt-version", default=JUDGE_PROMPT_VERSION)
     parser.add_argument("--pricing-file", required=True)
     parser.add_argument("--cost-ceiling", type=float, required=True)
+    parser.add_argument(
+        "--prior-cost",
+        type=float,
+        default=0.0,
+        help="judge spend already incurred outside this output file",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -441,6 +455,7 @@ def main() -> None:
             model=args.model,
             prompt_version=args.prompt_version,
             cost_ceiling=args.cost_ceiling,
+            prior_cost_usd=args.prior_cost,
         )
     except JudgeError as exc:
         print(json.dumps({"error": str(exc)}, indent=2))

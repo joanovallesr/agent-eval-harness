@@ -45,7 +45,8 @@ the report half to tune anything.
 | Human labels | 30 correct |
 | Judge labels | 30 correct |
 | Raw agreement | **1.00 (30/30)** |
-| Raw agreement 95% Wilson interval | [0.886, 1.000] (descriptive, not a κ interval) |
+| Raw agreement 95% Wilson interval | [0.886, 1.000] (trace-level description, not a κ interval) |
+| Raw agreement task-cluster bootstrap | [1.000, 1.000] (15 tasks; degenerate because every label is correct) |
 | Cohen's κ | **undefined (0/0)** |
 | 95% CI for κ | **undefined** |
 | Confusion matrix | 30 on the correct/correct cell, 0 elsewhere |
@@ -57,7 +58,7 @@ not met.
 
 **Ship-rule outcome: miss.** I am reporting it as a published negative result,
 not as a calibrated judge. The raw agreement is perfect, but a one-class label
-set cannot demonstrate discrimination; the effective sample is 30 tasks, not
+set cannot demonstrate discrimination; the effective sample is 15 tasks, not
 60 independent traces, because the two traces per task share a task.
 
 ## Per-arm judge summaries — secondary only
@@ -65,10 +66,10 @@ set cannot demonstrate discrimination; the effective sample is 30 tasks, not
 These are judge rates on the report half, not headline results. No pass/fail
 framing.
 
-| Arm | Traces | Judge correct | Judge partial | Judge wrong |
-|---|---:|---:|---:|---:|
-| `haiku-agent` | 15 | 15 | 0 | 0 |
-| `sonnet-agent` | 15 | 15 | 0 | 0 |
+| Arm | Traces | Judge correct | Judge partial | Judge wrong | Judge correct rate (95% Wilson) |
+|---|---:|---:|---:|---:|---|
+| `haiku-agent` | 15 | 15 | 0 | 0 | 1.00 [0.796, 1.000] |
+| `sonnet-agent` | 15 | 15 | 0 | 0 | 1.00 [0.796, 1.000] |
 
 The human labels are also 15/15 correct in each arm. With no failures in
 either class, this comparison carries no signal.
@@ -80,32 +81,38 @@ The separate blind batch used 15 report traces (8 `haiku-agent`, 7
 and the frozen prompt. The batch contained no original trace ids, model
 identity, or earlier judge output.
 
-| Comparison | n | Raw agreement | κ |
-|---|---:|---:|---|
-| Judge report labels vs judge relabel labels | 15 | 1.00 (15/15) | undefined |
-| Human labels vs judge relabel labels | 15 | 1.00 (15/15) | undefined |
+| Comparison | n | Raw agreement | Raw agreement 95% Wilson | κ |
+|---|---:|---:|---|---|
+| Judge report labels vs judge relabel labels | 15 | 1.00 (15/15) | [0.796, 1.000] | undefined |
+| Human labels vs judge relabel labels | 15 | 1.00 (15/15) | [0.796, 1.000] | undefined |
+
+The 15 relabel traces come from 10 tasks, so the Wilson interval is
+trace-level and descriptive; a task-cluster bootstrap is degenerate at
+[1.000, 1.000] because every relabel is correct.
 
 Actual gap:
 
 | Clock | Time |
 |---|---|
-| Human labels completed | 2026-11-01T02:50:07Z |
-| Original report-half judge completed | 2026-11-01T02:55:58Z |
-| Blind relabel judge completed | 2026-11-01T02:57:57Z |
+| Human labels file last written | 2026-11-01T02:50:07Z |
+| Original report-half judge file last written | 2026-11-01T02:55:58Z |
+| Blind relabel judge file last written | 2026-11-01T02:57:57Z |
 | Human labels to relabel | **469.7 s (7.8 min)** |
 | Report judge to relabel | **119.2 s (2.0 min)** |
 
-The design called for a one-week gap before relabeling. The actual gap was
-minutes, not a week, and I am recording that rather than hiding it.
+The gap is computed from file mtimes; no separate completion timestamps were
+supplied. The design called for a one-week gap before relabeling. The actual
+gap was minutes, not a week, and I am recording that rather than hiding it.
 
 The brief specified the relabel batch be run by the judge; the design text
 describes a human relabel as "our own consistency." I ran the judge relabel
 batch because no second human labels existed. It measures judge
-self-consistency, not human intra-rater consistency. I also generated a blank
-human relabel packet at
+self-consistency, not human intra-rater consistency. **The human intra-rater
+ceiling is not measured.** I generated a blank human relabel packet at
 `results/phase5-labeling-20261031/relabel-packet/` with its private mapping at
 `results/phase5-labeling-20261031/private/relabel-mapping.json`. With all
-human labels in one class, a human relabel κ would also be undefined.
+human labels in one class, a human relabel κ would also be undefined; filling
+that packet is the only way to measure the design's human ceiling.
 
 ## Judge cost and Phase 5 budget
 
@@ -115,14 +122,22 @@ human labels in one class, a human relabel κ would also be undefined.
 | Report v1 frozen | 30 | 68,669 | 2,965 | $0.008349 |
 | Blind relabel | 15 | 34,507 | 2,008 | $0.004455 |
 | Model availability smoke | 1 | 13 | 4 | $0.000003 |
-| **Logged judge total** | **76** | **170,609** | **7,551** | **$0.020836** |
+| **Logged completed calls** | **76** | **170,609** | **7,551** | **$0.020836** |
 
-One additional relabel request returned an API error at the output cap before
-a usage record was written. It is not in the logged total; the provider may
-bill it, and the amount is below one cent. I raised the output cap from 300 to
-1,000 tokens after that error and re-ran the relabel batch. The prompt and
-rubric stayed at `phase5-judge-v1`; only the cap changed. The tune and report
-labels were unaffected because no completed response hit the cap.
+The smoke call is logged in
+`results/phase5-judge-20261031/model-smoke.jsonl`. One additional relabel
+request returned an API error at the output cap before a usage record was
+written; it is logged in
+`results/phase5-judge-20261031/failed-requests.jsonl` with zero recorded cost.
+The provider may bill it, and the amount is below one cent. I raised the output
+cap from 300 to 1,000 tokens after that error and re-ran the relabel batch. The
+prompt and rubric stayed at `phase5-judge-v1`; only the cap changed. The tune
+and report labels were unaffected because no completed response hit the cap.
+
+Each judge invocation used a stricter ceiling than the remaining Phase 5
+budget: $0.05 for tune, $0.05 for report, and $0.03 for relabel, totaling
+$0.13 of authorized ceiling against the $0.212986 remainder. The runner now
+accepts `--prior-cost` so the guard can be cumulative across judge runs.
 
 Phase 5 actuals:
 
@@ -136,7 +151,9 @@ Phase 5 actuals:
 
 The judge fit inside the $0.212986 that Part 1 left. The ledger now totals
 **$3.765892**; the pre-registration later-phase allowance of $2.000000 still
-has $0.692149 unused. The test inequality on actuals so far is
+has $0.692149 unused. The total is computed from unrounded run costs; the
+displayed terms are rounded to six decimals, so adding them can differ by
+$0.000001. The test inequality on actuals so far is
 
 ```text
 20.00 − 2.458041 (through Phase 3) − 1.307851 (Phase 5)
@@ -151,7 +168,7 @@ has $0.692149 unused. The test inequality on actuals so far is
   judge. With 60/60 human labels `correct`, κ has no class variation to work
   with and is undefined. The ship rule is a miss.
 - The honest resume line is: **κ undefined (one-class labels), n = 30 report
-  traces (30 tasks), raw agreement 30/30; ship rule not met.**
+  traces over 15 tasks, raw agreement 30/30; ship rule not met.**
 - The next useful change is task difficulty: the multi-step set needs traces
   that fail in varied ways before another κ calibration can say anything.
   More judge prompt tuning against an all-correct label set would only fit

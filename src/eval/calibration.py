@@ -358,6 +358,7 @@ def analyse_relabel(
             "human_to_relabel_seconds": relabel_mtime - label_mtime,
             "report_judge_to_relabel_seconds": relabel_mtime - report_mtime,
             "design_gap": "one week",
+            "method": "file mtimes; no separate completion timestamps were supplied",
         },
         "bootstrap": {
             "n_resamples": n_resamples,
