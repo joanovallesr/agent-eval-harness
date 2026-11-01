@@ -1,0 +1,622 @@
+{
+  "analysis_version": "phase6-heldout-v1",
+  "cost": {
+    "aggregate_ratio": 0.051732847472715504,
+    "bootstrap": {
+      "high": 0.053096062641888736,
+      "low": 0.050591660589701444,
+      "ratio": 0.051732847472715504,
+      "resamples": 2000,
+      "seed": 42
+    },
+    "per_arm_cost_per_case_usd": {
+      "haiku-agent": 0.0001529806623931624,
+      "haiku-direct": 0.00014917425213675214,
+      "sonnet-direct": 0.002957128205128205
+    },
+    "per_arm_total_cost_usd": {
+      "haiku-agent": 0.1431899,
+      "haiku-direct": 0.1396271,
+      "sonnet-direct": 2.767872
+    },
+    "per_tool": {
+      "average": {
+        "haiku_agent_cost": 0.0001322854700854701,
+        "ratio": 0.050297350171260705,
+        "sonnet_direct_cost": 0.002630068376068376
+      },
+      "calculate_investment_return": {
+        "haiku_agent_cost": 0.00015766837606837606,
+        "ratio": 0.049182827921956725,
+        "sonnet_direct_cost": 0.003205760683760684
+      },
+      "calculate_quarterly_dividend": {
+        "haiku_agent_cost": 0.00017304102564102565,
+        "ratio": 0.04867059638056042,
+        "sonnet_direct_cost": 0.0035553504273504273
+      },
+      "calculate_standard_deviation": {
+        "haiku_agent_cost": 0.0001425940170940171,
+        "ratio": 0.054863330834089695,
+        "sonnet_direct_cost": 0.0025990769230769227
+      },
+      "chi_square_independence_test": {
+        "haiku_agent_cost": 0.00018716923076923076,
+        "ratio": 0.06136730484688158,
+        "sonnet_direct_cost": 0.003049982905982906
+      },
+      "find_majority_element": {
+        "haiku_agent_cost": 0.00013367179487179488,
+        "ratio": 0.05001918943813326,
+        "sonnet_direct_cost": 0.0026724102564102564
+      },
+      "find_pairs_with_sum": {
+        "haiku_agent_cost": 0.00016491880341880342,
+        "ratio": 0.049868193213242706,
+        "sonnet_direct_cost": 0.003307094017094017
+      },
+      "get_ip_location": {
+        "haiku_agent_cost": 0.00013249658119658122,
+        "ratio": 0.05023982214271362,
+        "sonnet_direct_cost": 0.0026372820512820514
+      }
+    },
+    "ratio": 0.05166918465448393,
+    "t_interval_high": 0.05516887354900856,
+    "t_interval_low": 0.048391501785650194,
+    "threshold": 0.1,
+    "verdict": "parity holds"
+  },
+  "diagnostics": {
+    "haiku-agent": {
+      "cache_nonzero_records": 0,
+      "format_failure_count": 5,
+      "format_failure_kinds": {
+        "schema_validation_after_retries": 5,
+        "truncated": 1
+      },
+      "format_failure_rate": 0.005341880341880342,
+      "schema_failure_count": 5,
+      "schema_failure_rate": 0.005341880341880342,
+      "truncation_count": 1,
+      "truncation_rate": 0.0010683760683760685
+    },
+    "haiku-direct": {
+      "cache_nonzero_records": 0,
+      "format_failure_count": 8,
+      "format_failure_kinds": {
+        "no_tool_use": 8,
+        "truncated": 1
+      },
+      "format_failure_rate": 0.008547008547008548,
+      "schema_failure_count": 0,
+      "schema_failure_rate": 0.0,
+      "truncation_count": 1,
+      "truncation_rate": 0.0010683760683760685
+    },
+    "sonnet-direct": {
+      "cache_nonzero_records": 0,
+      "format_failure_count": 3,
+      "format_failure_kinds": {
+        "no_tool_use": 3,
+        "truncated": 1
+      },
+      "format_failure_rate": 0.003205128205128205,
+      "schema_failure_count": 0,
+      "schema_failure_rate": 0.0,
+      "truncation_count": 1,
+      "truncation_rate": 0.0010683760683760685
+    }
+  },
+  "failure_taxonomy": {
+    "haiku-agent": {
+      "counts": {
+        "extra-call": 0,
+        "format-error": 5,
+        "infrastructure": 0,
+        "missing-call": 0,
+        "partial-answer": 0,
+        "refusal": 0,
+        "right-tool-wrong-params": 139,
+        "truncated": 1,
+        "wrong-tool": 1
+      },
+      "labelled": 146,
+      "non_exact": 146
+    },
+    "haiku-direct": {
+      "counts": {
+        "extra-call": 0,
+        "format-error": 0,
+        "infrastructure": 0,
+        "missing-call": 8,
+        "partial-answer": 0,
+        "refusal": 0,
+        "right-tool-wrong-params": 137,
+        "truncated": 1,
+        "wrong-tool": 2
+      },
+      "labelled": 148,
+      "non_exact": 148
+    },
+    "sonnet-direct": {
+      "counts": {
+        "extra-call": 0,
+        "format-error": 0,
+        "infrastructure": 0,
+        "missing-call": 3,
+        "partial-answer": 0,
+        "refusal": 0,
+        "right-tool-wrong-params": 102,
+        "truncated": 1,
+        "wrong-tool": 2
+      },
+      "labelled": 108,
+      "non_exact": 108
+    }
+  },
+  "generated_from": "results/phase6-heldout-20261031/results.json",
+  "gold_schema_inconsistencies": {
+    "by_tool": {
+      "average": 1,
+      "calculate_standard_deviation": 2,
+      "chi_square_independence_test": 1
+    },
+    "calls": 1220,
+    "cases": 4
+  },
+  "notes": [
+    "estimation-first: no pass/fail accuracy verdict",
+    "the tool-clustered t-interval governs; the case bootstrap is a sensitivity check",
+    "k = 1, so pass@1 equals accuracy"
+  ],
+  "per_tool_table": [
+    {
+      "haiku-agent": {
+        "exact": 0.9914529914529915,
+        "exact_count": 116,
+        "n": 117,
+        "partial": 0.9914529914529915
+      },
+      "haiku-direct": {
+        "exact": 0.9914529914529915,
+        "exact_count": 116,
+        "n": 117,
+        "partial": 0.9914529914529915
+      },
+      "sonnet-direct": {
+        "exact": 0.9914529914529915,
+        "exact_count": 116,
+        "n": 117,
+        "partial": 0.9914529914529915
+      },
+      "tool": "average"
+    },
+    {
+      "haiku-agent": {
+        "exact": 0.017094017094017096,
+        "exact_count": 2,
+        "n": 117,
+        "partial": 0.6695156695156694
+      },
+      "haiku-direct": {
+        "exact": 0.02564102564102564,
+        "exact_count": 3,
+        "n": 117,
+        "partial": 0.6723646723646722
+      },
+      "sonnet-direct": {
+        "exact": 0.3247863247863248,
+        "exact_count": 38,
+        "n": 117,
+        "partial": 0.7720797720797721
+      },
+      "tool": "calculate_investment_return"
+    },
+    {
+      "haiku-agent": {
+        "exact": 0.9829059829059829,
+        "exact_count": 115,
+        "n": 117,
+        "partial": 0.9914529914529915
+      },
+      "haiku-direct": {
+        "exact": 0.9743589743589743,
+        "exact_count": 114,
+        "n": 117,
+        "partial": 0.9871794871794872
+      },
+      "sonnet-direct": {
+        "exact": 0.9914529914529915,
+        "exact_count": 116,
+        "n": 117,
+        "partial": 0.9957264957264957
+      },
+      "tool": "calculate_quarterly_dividend"
+    },
+    {
+      "haiku-agent": {
+        "exact": 0.9572649572649573,
+        "exact_count": 112,
+        "n": 117,
+        "partial": 0.9572649572649573
+      },
+      "haiku-direct": {
+        "exact": 0.9487179487179487,
+        "exact_count": 111,
+        "n": 117,
+        "partial": 0.9487179487179487
+      },
+      "sonnet-direct": {
+        "exact": 0.9487179487179487,
+        "exact_count": 111,
+        "n": 117,
+        "partial": 0.9487179487179487
+      },
+      "tool": "calculate_standard_deviation"
+    },
+    {
+      "haiku-agent": {
+        "exact": 0.8205128205128205,
+        "exact_count": 96,
+        "n": 117,
+        "partial": 0.8888888888888888
+      },
+      "haiku-direct": {
+        "exact": 0.811965811965812,
+        "exact_count": 95,
+        "n": 117,
+        "partial": 0.8717948717948718
+      },
+      "sonnet-direct": {
+        "exact": 0.8376068376068376,
+        "exact_count": 98,
+        "n": 117,
+        "partial": 0.905982905982906
+      },
+      "tool": "chi_square_independence_test"
+    },
+    {
+      "haiku-agent": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "haiku-direct": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "sonnet-direct": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "tool": "find_majority_element"
+    },
+    {
+      "haiku-agent": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "haiku-direct": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "sonnet-direct": {
+        "exact": 1.0,
+        "exact_count": 117,
+        "n": 117,
+        "partial": 1.0
+      },
+      "tool": "find_pairs_with_sum"
+    },
+    {
+      "haiku-agent": {
+        "exact": 0.9829059829059829,
+        "exact_count": 115,
+        "n": 117,
+        "partial": 0.9829059829059829
+      },
+      "haiku-direct": {
+        "exact": 0.9829059829059829,
+        "exact_count": 115,
+        "n": 117,
+        "partial": 0.9829059829059829
+      },
+      "sonnet-direct": {
+        "exact": 0.9829059829059829,
+        "exact_count": 115,
+        "n": 117,
+        "partial": 0.9829059829059829
+      },
+      "tool": "get_ip_location"
+    }
+  ],
+  "phase5": {
+    "human_intra_rater_ceiling_measured": false,
+    "kappa": null,
+    "kappa_defined": false,
+    "n_tasks": 15,
+    "n_traces": 30,
+    "raw_agreement": 1.0,
+    "raw_agreement_correct": 30,
+    "raw_agreement_n": 30,
+    "ship_rule_met": false
+  },
+  "primary": {
+    "bootstrap": {
+      "high": -0.027777777777777776,
+      "low": -0.05448717948717949,
+      "mean": -0.0405982905982906,
+      "resamples": 2000,
+      "seed": 42
+    },
+    "comparison": "haiku-agent - sonnet-direct",
+    "cost_ratio": {
+      "high": 0.05516887354900856,
+      "low": 0.048391501785650194,
+      "mean_log_ratio": -2.9628937166704477,
+      "n_tools": 8,
+      "ratio": 0.05166918465448393,
+      "sd_log_ratio": 0.07839199384980462
+    },
+    "cost_ratio_bootstrap": {
+      "high": 0.053096062641888736,
+      "low": 0.050591660589701444,
+      "ratio": 0.051732847472715504,
+      "resamples": 2000,
+      "seed": 42
+    },
+    "discordant_rate": 0.042735042735042736,
+    "mean_difference": -0.0405982905982906,
+    "n_cases": 936,
+    "n_tools": 8,
+    "per_tool": {
+      "average": {
+        "cost_ratio": 0.050297350171260705,
+        "log_cost_ratio": -2.989802883755944,
+        "mean_agent": 0.9914529914529915,
+        "mean_agent_cost": 0.0001322854700854701,
+        "mean_baseline": 0.9914529914529915,
+        "mean_baseline_cost": 0.002630068376068376,
+        "mean_difference": 0.0,
+        "n": 117,
+        "sigma2_within": 0.0,
+        "tool": "average"
+      },
+      "calculate_investment_return": {
+        "cost_ratio": 0.049182827921956725,
+        "log_cost_ratio": -3.0122107423841067,
+        "mean_agent": 0.017094017094017096,
+        "mean_agent_cost": 0.00015766837606837606,
+        "mean_baseline": 0.3247863247863248,
+        "mean_baseline_cost": 0.003205760683760684,
+        "mean_difference": -0.3076923076923077,
+        "n": 117,
+        "sigma2_within": 0.21485411140583555,
+        "tool": "calculate_investment_return"
+      },
+      "calculate_quarterly_dividend": {
+        "cost_ratio": 0.04867059638056042,
+        "log_cost_ratio": -3.0226802016560557,
+        "mean_agent": 0.9829059829059829,
+        "mean_agent_cost": 0.00017304102564102565,
+        "mean_baseline": 0.9914529914529915,
+        "mean_baseline_cost": 0.0035553504273504273,
+        "mean_difference": -0.008547008547008548,
+        "n": 117,
+        "sigma2_within": 0.008547008547008548,
+        "tool": "calculate_quarterly_dividend"
+      },
+      "calculate_standard_deviation": {
+        "cost_ratio": 0.054863330834089695,
+        "log_cost_ratio": -2.9029100801482595,
+        "mean_agent": 0.9572649572649573,
+        "mean_agent_cost": 0.0001425940170940171,
+        "mean_baseline": 0.9487179487179487,
+        "mean_baseline_cost": 0.0025990769230769227,
+        "mean_difference": 0.008547008547008548,
+        "n": 117,
+        "sigma2_within": 0.008547008547008548,
+        "tool": "calculate_standard_deviation"
+      },
+      "chi_square_independence_test": {
+        "cost_ratio": 0.06136730484688158,
+        "log_cost_ratio": -2.7908780800049695,
+        "mean_agent": 0.8205128205128205,
+        "mean_agent_cost": 0.00018716923076923076,
+        "mean_baseline": 0.8376068376068376,
+        "mean_baseline_cost": 0.003049982905982906,
+        "mean_difference": -0.017094017094017096,
+        "n": 117,
+        "sigma2_within": 0.016946654877689357,
+        "tool": "chi_square_independence_test"
+      },
+      "find_majority_element": {
+        "cost_ratio": 0.05001918943813326,
+        "log_cost_ratio": -2.995348558419395,
+        "mean_agent": 1.0,
+        "mean_agent_cost": 0.00013367179487179488,
+        "mean_baseline": 1.0,
+        "mean_baseline_cost": 0.0026724102564102564,
+        "mean_difference": 0.0,
+        "n": 117,
+        "sigma2_within": 0.0,
+        "tool": "find_majority_element"
+      },
+      "find_pairs_with_sum": {
+        "cost_ratio": 0.049868193213242706,
+        "log_cost_ratio": -2.9983718900133973,
+        "mean_agent": 1.0,
+        "mean_agent_cost": 0.00016491880341880342,
+        "mean_baseline": 1.0,
+        "mean_baseline_cost": 0.003307094017094017,
+        "mean_difference": 0.0,
+        "n": 117,
+        "sigma2_within": 0.0,
+        "tool": "find_pairs_with_sum"
+      },
+      "get_ip_location": {
+        "cost_ratio": 0.05023982214271362,
+        "log_cost_ratio": -2.9909472969814535,
+        "mean_agent": 0.9829059829059829,
+        "mean_agent_cost": 0.00013249658119658122,
+        "mean_baseline": 0.9829059829059829,
+        "mean_baseline_cost": 0.0026372820512820514,
+        "mean_difference": 0.0,
+        "n": 117,
+        "sigma2_within": 0.0,
+        "tool": "get_ip_location"
+      }
+    },
+    "t_interval_degrees_of_freedom": 7,
+    "t_interval_high": 0.04984615544094426,
+    "t_interval_low": -0.13104273663752547,
+    "tool_sd": 0.10818442900080238,
+    "tool_se": 0.03824897168263098
+  },
+  "run": {
+    "aborted_attempt_cost_usd": -3.1086244689504383e-15,
+    "aborted_records": 0,
+    "arms": {
+      "haiku-agent": {
+        "effort": "low",
+        "effort_transmitted": true,
+        "model_id": "claude-haiku-5-5",
+        "prompt_version": "phase2-mini-v1"
+      },
+      "haiku-direct": {
+        "effort": "low",
+        "effort_transmitted": true,
+        "model_id": "claude-haiku-5-5",
+        "prompt_version": "phase2-mini-v1"
+      },
+      "sonnet-direct": {
+        "effort": "api_default",
+        "effort_transmitted": false,
+        "model_id": "claude-sonnet-5-5",
+        "prompt_version": "phase2-mini-v1"
+      }
+    },
+    "completed_arm_cost_usd": 3.050689,
+    "created_at": "2026-11-01T03:24:27.729681+00:00",
+    "dev_vs_final": "heldout_test",
+    "git_commit": "e22f678500482af4e43c9c3cc36e81a0e15a8ae8",
+    "label": "phase6/heldout",
+    "match_spec_version": "1.1",
+    "max_tokens": 1024,
+    "pricing_basis": "list_sync",
+    "pricing_path": "config/pricing.list_sync.2026-10-31.json",
+    "prompt_version": "phase2-mini-v1",
+    "records_per_arm": {
+      "haiku-agent": 936,
+      "haiku-direct": 936,
+      "sonnet-direct": 936
+    },
+    "repeats": 1,
+    "resume_history": [],
+    "run_id": "phase6-heldout-20261031",
+    "run_status": "completed",
+    "total_cost_usd": 3.050688999999997
+  },
+  "secondary": {
+    "bootstrap": {
+      "high": -0.029914529914529916,
+      "low": -0.05555555555555555,
+      "mean": -0.042735042735042736,
+      "resamples": 2000,
+      "seed": 42
+    },
+    "comparison": "haiku-direct - sonnet-direct",
+    "cost_ratio": {
+      "high": 0.051862686427001266,
+      "low": 0.04907212201336002,
+      "mean_log_ratio": -2.9868099419440917,
+      "n_tools": 8,
+      "ratio": 0.05044811271283037,
+      "sd_log_ratio": 0.03307841052622055
+    },
+    "cost_ratio_bootstrap": {
+      "high": 0.050875600375111005,
+      "low": 0.05002756246230428,
+      "ratio": 0.050445649220773214,
+      "resamples": 2000,
+      "seed": 42
+    },
+    "discordant_rate": 0.042735042735042736,
+    "mean_difference": -0.042735042735042736,
+    "n_cases": 936,
+    "n_tools": 8,
+    "t_interval_degrees_of_freedom": 7,
+    "t_interval_high": 0.044277315842536885,
+    "t_interval_low": -0.12974740131262236,
+    "tool_sd": 0.10407916396154375,
+    "tool_se": 0.036797541308717055
+  },
+  "secondary_diagnostics": {
+    "haiku-agent": {
+      "lenient_exact": 0.844017094017094,
+      "lenient_partial": 0.9351851851851843,
+      "name_only": 0.9935897435897436,
+      "partial": 0.9351851851851852
+    },
+    "haiku-direct": {
+      "lenient_exact": 0.8418803418803419,
+      "lenient_partial": 0.9318019943019934,
+      "name_only": 0.9893162393162394,
+      "partial": 0.9318019943019943
+    },
+    "sonnet-direct": {
+      "lenient_exact": 0.8846153846153846,
+      "lenient_partial": 0.9496082621082615,
+      "name_only": 0.9946581196581197,
+      "partial": 0.9496082621082621
+    }
+  },
+  "verification": {
+    "budget": {
+      "available_with_reserve": 10.261783,
+      "cap": 20.0,
+      "ledger_total": 3.765892,
+      "reserve": 5.972325,
+      "slack_after_test_projection": 6.972904999999999,
+      "test_projection": 3.288878
+    },
+    "cases_per_tool": {
+      "average": 117,
+      "calculate_investment_return": 117,
+      "calculate_quarterly_dividend": 117,
+      "calculate_standard_deviation": 117,
+      "chi_square_independence_test": 117,
+      "find_majority_element": 117,
+      "find_pairs_with_sum": 117,
+      "get_ip_location": 117
+    },
+    "duplicate_case_ids": 0,
+    "gold_tools_outside_pre_registered": [],
+    "head_at_analysis": "1fb6860c236e930baf2a53b762f7eb819888db6c",
+    "maximum_per_tool": 117,
+    "metadata_checksum_matches": true,
+    "metadata_sha256": "b64a5f99a8a54645aad2671a748c9047ac58fa892bf0b4e0d7c484c1689de7ae",
+    "metadata_sha256_recorded": "b64a5f99a8a54645aad2671a748c9047ac58fa892bf0b4e0d7c484c1689de7ae",
+    "minimum_per_tool": 117,
+    "n_cases": 936,
+    "n_tools": 8,
+    "pre_registration_identical": true,
+    "pre_registration_sha256_head": "49b42de8d682f890d9991ff97172a348e32f72d0687d557d03ddf503f5e8bc9c",
+    "pre_registration_sha256_tag": "49b42de8d682f890d9991ff97172a348e32f72d0687d557d03ddf503f5e8bc9c",
+    "pre_registration_tag_commit": "cc8b79cf1bf5ca6f28b613957baaec50d54512fe",
+    "sample_checksum_matches": true,
+    "sample_path": "data/phase3/test.jsonl",
+    "sample_sha256": "ddd23366eabb1f9bf148d7c129c789073c54caa6d0a6521b50cba3d51cb5dc06",
+    "sample_sha256_recorded": "ddd23366eabb1f9bf148d7c129c789073c54caa6d0a6521b50cba3d51cb5dc06"
+  }
+}

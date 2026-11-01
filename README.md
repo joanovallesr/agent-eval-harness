@@ -290,7 +290,7 @@ I ran one pre-registered pass over 936 cases (8 tools × 117), k = 1, MATCH_SPEC
 | Primary: haiku-agent − sonnet-direct | **-4.06 pts** [-13.10, +4.98] (tool-clustered t, df 7) |
 | Secondary: haiku-direct − sonnet-direct | **-4.27 pts** [-12.97, +4.43] (estimate and interval only) |
 | Cost ratio, haiku-agent / sonnet-direct | **[0.048392, 0.055169]**, threshold 0.10 → **parity holds** |
-| Phase 5 judge calibration | κ **undefined** (one-class labels), raw agreement 30/30, n = 30 traces over 15 tasks, ship rule **not met** |
+| Phase 5 judge calibration | κ **undefined** (one-class labels), raw agreement 30/30, n = 30 traces over 15 tasks, ship rule **not met**; human intra-rater ceiling **not measured** |
 
 Full report: `docs/RESULTS.md`.
 <!-- PHASE6-RESULTS:END -->
@@ -302,7 +302,10 @@ table above, and the Phase 6 budget actuals are generated from the run's
 ```bash
 PYTHONPATH=src:scripts python scripts/phase6_report.py \
   --run-dir results/phase6-heldout-20261031 \
-  --analysis-out results/phase6-heldout-20261031/analysis.json
+  --analysis-out docs/RESULTS.json
 ```
+
+`docs/RESULTS.json` is the committed aggregate contract; the run's raw
+`results.json` stays gitignored.
 
 This is a local post-run step; CI does not need the raw results.

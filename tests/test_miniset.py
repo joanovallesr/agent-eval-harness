@@ -175,6 +175,40 @@ def test_test_stage_allows_schema_invalid_gold_but_mini_stage_does_not():
     validate_case(case, test_split=True)
 
 
+def test_load_and_validate_auto_detects_test_stage(tmp_path: Path):
+    schema = {
+        "type": "object",
+        "properties": {"numbers": {"type": "array", "items": {"type": "number"}}},
+        "required": ["numbers"],
+    }
+    row = {
+        "id": "test-auto-detect",
+        "query": "Average these.",
+        "tool_name": "average",
+        "answers": json.dumps(
+            [{"name": "average", "arguments": {"numbers": [1, 2, 3]}}]
+        ),
+        "tools": [
+            {
+                "name": "average",
+                "description": "Average numbers.",
+                "input_schema": schema,
+            }
+        ],
+    }
+    cases = tmp_path / "test.jsonl"
+    cases.write_text(json.dumps(row) + "\n")
+    meta = tmp_path / "test.meta.json"
+    meta.write_text(json.dumps({"stage": "test"}))
+
+    loaded = load_and_validate(cases)
+    assert len(loaded) == 1
+
+    meta.write_text(json.dumps({"stage": "dev"}))
+    with pytest.raises(MiniSetError, match="held-out candidate"):
+        load_and_validate(cases)
+
+
 def test_is_test_subset_reads_stage_from_sibling_metadata(tmp_path: Path):
     sample = tmp_path / "sample.jsonl"
     sample.write_text("")

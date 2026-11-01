@@ -9,7 +9,9 @@ from pathlib import Path
 from phase6_report import (
     END_MARKER,
     START_MARKER,
-    _positive_cache,
+    _diagnostics,
+    has_nonzero_cache,
+    _secondary_diagnostics,
     build_analysis,
     classify_failure,
     cost_verdict,
@@ -244,13 +246,58 @@ def test_taxonomy_assigns_one_label_to_every_non_exact_case():
 
 
 def test_cache_guard_sees_nested_nonzero_usage():
-    assert _positive_cache({"cache_read_input_tokens": 1})
-    assert _positive_cache(
+    assert has_nonzero_cache({"cache_read_input_tokens": 1})
+    assert has_nonzero_cache(
         {"cache_creation": {"ephemeral_5m_input_tokens": 3}}
     )
-    assert not _positive_cache(
+    assert not has_nonzero_cache(
         {"cache_read_input_tokens": 0, "cache_creation": {"ephemeral_5m_input_tokens": 0}}
     )
+
+
+def test_format_failure_rate_excludes_truncation():
+    records = [
+        {
+            "format_failure": True,
+            "format_failure_kind": ["truncated"],
+            "failure_reason": "truncated",
+            "schema_validation_failed": False,
+            "raw_usage": {},
+        },
+        {
+            "format_failure": True,
+            "format_failure_kind": ["no_tool_use"],
+            "failure_reason": "text_only",
+            "schema_validation_failed": False,
+            "raw_usage": {},
+        },
+    ]
+    diagnostics = _diagnostics(records)
+    assert diagnostics["format_failure_count"] == 1
+    assert diagnostics["truncation_count"] == 1
+
+
+def test_secondary_diagnostics_include_name_only_and_lenient_variants():
+    records = [
+        {
+            "task_id": "case-1",
+            "partial": 0.5,
+            "name_only": True,
+            "format_failure": False,
+            "final_attempt_calls": [
+                {"name": "average", "input": {"x": " 7 "}}
+            ],
+        }
+    ]
+    answers = {
+        "case-1": json.dumps(
+            [{"name": "average", "arguments": {"x": "7"}}]
+        )
+    }
+    diagnostics = _secondary_diagnostics(records, answers)
+    assert diagnostics["partial"] == 0.5
+    assert diagnostics["name_only"] == 1.0
+    assert diagnostics["lenient_exact"] == 1.0
 
 
 def test_cost_verdict_is_the_pre_registered_binary_rule():

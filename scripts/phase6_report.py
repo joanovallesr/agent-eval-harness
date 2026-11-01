@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from eval.metrics import analyse_paired
-from eval.scorer import parse_gold
+from eval.scorer import parse_gold, score_case
 
 ARMS = ("haiku-agent", "haiku-direct", "sonnet-direct")
 PRIMARY = ("haiku-agent", "sonnet-direct")
@@ -68,6 +68,17 @@ def _gold_names_by_case(cases_path: Path) -> dict[str, list[str]]:
             row = json.loads(line)
             names[str(row["id"])] = [call.name for call in parse_gold(row["answers"])]
     return names
+
+
+def _gold_answers_by_case(cases_path: Path) -> dict[str, str]:
+    answers: dict[str, str] = {}
+    with cases_path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            answers[str(row["id"])] = str(row["answers"])
+    return answers
 
 
 def _gold_schema_inconsistencies(cases_path: Path) -> dict[str, Any]:
@@ -198,16 +209,17 @@ def _arm_tool_stats(
     output: dict[str, dict[str, float]] = {}
     for tool, rows in sorted(grouped.items()):
         n = len(rows)
+        exact_count = sum(int(row.get("exact", 0)) for row in rows)
         output[tool] = {
             "n": n,
-            "exact": sum(int(row.get("exact", 0)) for row in rows) / n,
-            "exact_count": sum(int(row.get("exact", 0)) for row in rows),
+            "exact": exact_count / n,
+            "exact_count": exact_count,
             "partial": sum(float(row.get("partial", 0.0)) for row in rows) / n,
         }
     return output
 
 
-def _positive_cache(value: Any, in_cache: bool = False) -> bool:
+def has_nonzero_cache(value: Any, in_cache: bool = False) -> bool:
     if isinstance(value, Mapping):
         for key, item in value.items():
             cache_key = in_cache or "cache" in str(key).lower()
@@ -218,11 +230,11 @@ def _positive_cache(value: Any, in_cache: bool = False) -> bool:
                 and item > 0
             ):
                 return True
-            if _positive_cache(item, cache_key):
+            if has_nonzero_cache(item, cache_key):
                 return True
     elif isinstance(value, list):
         for item in value:
-            if _positive_cache(item, in_cache):
+            if has_nonzero_cache(item, in_cache):
                 return True
     return False
 
@@ -231,11 +243,25 @@ def cost_verdict(upper: float, threshold: float = COST_THRESHOLD) -> str:
     return "parity holds" if upper <= threshold else "parity fails"
 
 
+FORMAT_FAILURE_KINDS = {
+    "no_tool_use",
+    "malformed_block",
+    "schema_validation_after_retries",
+}
+
+
 def _diagnostics(
     records: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     n = len(records)
-    format_failures = sum(1 for record in records if record.get("format_failure"))
+    # PRE_REGISTRATION §6 defines the format-failure rate as no tool_use
+    # blocks, malformed blocks, and schema-validation failures after retries.
+    # Truncation is a separate event and is not folded into this rate.
+    format_failures = sum(
+        1
+        for record in records
+        if FORMAT_FAILURE_KINDS.intersection(record.get("format_failure_kind") or [])
+    )
     truncated = sum(
         1
         for record in records
@@ -246,7 +272,7 @@ def _diagnostics(
         1 for record in records if record.get("schema_validation_failed")
     )
     cache_nonzero = sum(
-        1 for record in records if _positive_cache(record.get("raw_usage") or {})
+        1 for record in records if has_nonzero_cache(record.get("raw_usage") or {})
     )
     kinds: Counter[str] = Counter()
     for record in records:
@@ -261,6 +287,51 @@ def _diagnostics(
         "schema_failure_count": schema_failures,
         "schema_failure_rate": schema_failures / n if n else 0.0,
         "cache_nonzero_records": cache_nonzero,
+    }
+
+
+def _secondary_diagnostics(
+    records: Sequence[Mapping[str, Any]],
+    answers_by_case: Mapping[str, str],
+) -> dict[str, float]:
+    """MATCH_SPEC §7 diagnostics: partial, name-only, and lenient-string.
+
+    The lenient variant is reconstructed from the recorded final-attempt calls.
+    A record already scored as a failure (format, truncation, refusal,
+    infrastructure) keeps its zero; the diagnostic never rescues it.
+    """
+
+    n = len(records)
+    partial = sum(float(record.get("partial", 0.0)) for record in records) / n
+    name_only = sum(1 for record in records if record.get("name_only")) / n
+    lenient_exact = 0.0
+    lenient_partial = 0.0
+    for record in records:
+        if record.get("format_failure"):
+            continue
+        calls = list(record.get("final_attempt_calls") or [])
+        blocks = [
+            {
+                "type": "tool_use",
+                "id": f"recorded-{index}",
+                "name": call.get("name"),
+                "input": call.get("input"),
+            }
+            for index, call in enumerate(calls)
+            if isinstance(call, Mapping)
+        ]
+        scored = score_case(
+            blocks,
+            answers_by_case.get(str(record["task_id"]), "[]"),
+            lenient=True,
+        )
+        lenient_exact += float(scored.exact)
+        lenient_partial += float(scored.partial)
+    return {
+        "partial": partial,
+        "name_only": name_only,
+        "lenient_exact": lenient_exact / n,
+        "lenient_partial": lenient_partial / n,
     }
 
 
@@ -417,17 +488,18 @@ def build_analysis(
         raise ValueError(f"analysis requires zero aborted cases, found {aborted}")
 
     gold_names = _gold_names_by_case(cases_path)
+    gold_answers = _gold_answers_by_case(cases_path)
     primary = analyse_paired(
-        records["haiku-agent"],
-        records["sonnet-direct"],
+        records[PRIMARY[0]],
+        records[PRIMARY[1]],
         label="haiku-agent vs sonnet-direct (PRIMARY)",
         resamples=resamples,
         seed=seed,
         include_sizing=False,
     )
     secondary = analyse_paired(
-        records["haiku-direct"],
-        records["sonnet-direct"],
+        records[SECONDARY[0]],
+        records[SECONDARY[1]],
         label="haiku-direct vs sonnet-direct (SECONDARY)",
         resamples=resamples,
         seed=seed,
@@ -455,6 +527,9 @@ def build_analysis(
         arm: _taxonomy(records[arm], gold_names) for arm in ARMS
     }
     diagnostics = {arm: _diagnostics(records[arm]) for arm in ARMS}
+    secondary_diagnostics = {
+        arm: _secondary_diagnostics(records[arm], gold_answers) for arm in ARMS
+    }
     cache_nonzero = sum(
         diagnostics[arm]["cache_nonzero_records"] for arm in ARMS
     )
@@ -580,6 +655,7 @@ def build_analysis(
         "per_tool_table": per_tool_table,
         "failure_taxonomy": taxonomy,
         "diagnostics": diagnostics,
+        "secondary_diagnostics": secondary_diagnostics,
         "gold_schema_inconsistencies": _gold_schema_inconsistencies(cases_path),
         "phase5": _phase5_facts(phase5_mapping, phase5_report_analysis),
         "notes": [
@@ -656,7 +732,8 @@ def render_results(analysis: Mapping[str, Any]) -> str:
         f"`haiku-direct` {run['records_per_arm']['haiku-direct']}, "
         f"`sonnet-direct` {run['records_per_arm']['sonnet-direct']}; aborted "
         f"records {run['aborted_records']}. Resume events: "
-        f"{len(run['resume_history'])}."
+        f"{len(run['resume_history'])}; the resume-equality path was not "
+        "exercised because none was needed."
     )
     lines.append(
         f"- I recorded the run contract field `dev_vs_final` as "
@@ -666,6 +743,10 @@ def render_results(analysis: Mapping[str, Any]) -> str:
     lines.append(
         f"- I measured actual list-price spend for this run at "
         f"**{_money(run['total_cost_usd'])}**."
+    )
+    lines.append(
+        "- A separate real-time monitor watched every checkpoint during the "
+        "run for nonzero cache tokens; it never fired."
     )
     if run["aborted_attempt_cost_usd"] > 0:
         lines.append(
@@ -747,6 +828,15 @@ def render_results(analysis: Mapping[str, Any]) -> str:
     lines.append(
         "I report this as an estimate. I give no non-inferiority, superiority, "
         "or equivalence verdict, and I do not convert the interval into one."
+    )
+    lines.append("")
+    lines.append(
+        f"The case-level bootstrap is narrower "
+        f"([{_points(primary['bootstrap']['low'])}, "
+        f"{_points(primary['bootstrap']['high'])}] pts) and excludes zero, while "
+        "the clustered t-interval includes zero. The two disagree; the "
+        "pre-registered clustered interval governs, and I do not read the "
+        "bootstrap as a verdict."
     )
     lines.append("")
     lines.append("### Per-tool mean exact match, primary pair")
@@ -872,6 +962,24 @@ def render_results(analysis: Mapping[str, Any]) -> str:
             f"| {_pct(row['sonnet-direct']['partial'])} |"
         )
     lines.append("")
+    lines.append("## Secondary diagnostics (MATCH_SPEC §7)")
+    lines.append("")
+    lines.append(
+        "These are diagnostics only; they never change the primary result. The "
+        "lenient-string variant is reconstructed from the recorded final-attempt "
+        "calls and keeps every failure-policy zero."
+    )
+    lines.append("")
+    lines.append("| Arm | Partial | Name-only | Lenient exact |")
+    lines.append("|---|---:|---:|---:|")
+    for arm in ARMS:
+        diagnostics = analysis["secondary_diagnostics"][arm]
+        lines.append(
+            f"| `{arm}` | {_pct(diagnostics['partial'])} "
+            f"| {_pct(diagnostics['name_only'])} "
+            f"| {_pct(diagnostics['lenient_exact'])} |"
+        )
+    lines.append("")
     lines.append("## Failure taxonomy")
     lines.append("")
     lines.append(
@@ -917,6 +1025,12 @@ def render_results(analysis: Mapping[str, Any]) -> str:
             f"({diagnostics['schema_failure_count']}) "
             f"| {diagnostics['cache_nonzero_records']} |"
         )
+    lines.append("")
+    lines.append(
+        "The format-failure rate counts `no_tool_use`, `malformed_block`, and "
+        "`schema_validation_after_retries`; truncation is a separate diagnostic "
+        "and is not folded into it."
+    )
     lines.append("")
     kinds = sorted(
         {
@@ -972,13 +1086,13 @@ def render_results(analysis: Mapping[str, Any]) -> str:
     lines.append(
         f"- The largest per-tool gap is `{biggest_tool}` "
         f"({_pct(biggest_stats['mean_agent'])} for haiku-agent vs "
-        f"{_pct(biggest_stats['mean_baseline'])} for sonnet-direct). In every "
-        "sampled row for that tool, gold encodes the annual interest rate as a "
-        "decimal fraction, while the tool description does not state the unit; "
-        "the Haiku models often emit the percentage form and Sonnet sometimes "
-        "does. MATCH_SPEC's strict value comparison correctly scores those as "
-        "non-exact. This is a dataset ambiguity, not a scorer defect, and I do "
-        "not re-score it."
+        f"{_pct(biggest_stats['mean_baseline'])} for sonnet-direct). The sampled "
+        "rows for that tool show a rate-convention mismatch (decimal fraction "
+        "vs percentage) that the tool description does not disambiguate; the "
+        "Haiku models mostly emit one convention and Sonnet sometimes the "
+        "other. MATCH_SPEC's strict value comparison scores those as non-exact. "
+        "This is a dataset ambiguity, not a scorer defect, and I do not "
+        "re-score it."
     )
     lines.append(
         "- The held-out tools come from one synthetic generator (xLAM-60k). "
@@ -1037,7 +1151,7 @@ def render_readme_block(analysis: Mapping[str, Any]) -> str:
         f"{phase5['raw_agreement_n']}, n = {phase5['n_traces']} traces over "
         f"{phase5['n_tasks']} "
         f"{'task' if phase5['n_tasks'] == 1 else 'tasks'}, ship rule "
-        f"**not met** |",
+        f"**not met**; human intra-rater ceiling **not measured** |",
         "",
         "Full report: `docs/RESULTS.md`.",
         END_MARKER,
