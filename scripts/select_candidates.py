@@ -9,7 +9,7 @@ where ``eligible_tools`` are tools with at least 100 single-tool cases after
 the structural filters below. This script re-applies those filters to the
 pinned xLAM revision, regenerates the order, and asserts that it equals the
 frozen list and sha256. It also applies the FINAL description-aware
-required-arguments rule (owner decision 1) and asserts the 38-row exclusion
+required-arguments rule and asserts the 38-row exclusion
 and 70-tool usable pool. It prints aggregates and tool names only; it never
 prints or writes a raw dataset row, query, answer, or full tool schema.
 
@@ -63,7 +63,7 @@ CATEGORY_FILTER = "filter/pagination/sort"
 CATEGORY_CORE = "core-input"
 CATEGORY_ORDER = (CATEGORY_OPTIONAL, CATEGORY_FILTER, CATEGORY_CORE)
 
-# FINAL required-arguments rule (owner decision 1, 2026-10-26). These are the
+# FINAL required-arguments rule (2026-10-26). These are the
 # exact lexical signals used to classify a missing parameter. They are a
 # deterministic text rule, not a judgement call.
 OPTIONAL_LANGUAGE = re.compile(
@@ -282,7 +282,7 @@ def analyze(dataset) -> Report:
             report.empty_answer_rows += 1
             continue
 
-        # Owner decision 3 (final): malformed gold calls are excluded and
+        # Malformed-gold rule (final): malformed gold calls are excluded and
         # counted before the split, never scored as 0. "Missing" applies to
         # the tool name; arguments must be a JSON object (not a string).
         malformed_name = any(

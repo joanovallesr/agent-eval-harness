@@ -5,7 +5,7 @@ The Phase-0 verifier used to treat a parameter without a literal ``default``
 key as required. The pinned revision has **zero** ``required`` keys, while the
 public dataset card describes a required flag. This script measures what that
 interim assumption removes and reproduces the FINAL deterministic rule chosen
-by the owner: only a missing core input excludes a row.
+under the final required-arguments rule: only a missing core input excludes a row.
 
 It is offline: it reads the pinned dataset only. It makes no model call, runs
 no candidate tool, and writes no raw query, gold answer, or full tool schema.
@@ -189,7 +189,7 @@ def analyze_required_filter(dataset) -> AuditReport:
         if malformed_arguments:
             report.malformed_argument_rows += 1
         if malformed_name or malformed_arguments:
-            # Owner decision 3: a counted, pre-registered exclusion, not 0.
+            # Malformed-gold rule: a counted, pre-registered exclusion, not 0.
             report.malformed_gold_rows += 1
             continue
 
@@ -303,7 +303,7 @@ def render_markdown(
 
     add("# Required-Arguments Filter Audit — Pinned xLAM Revision")
     add("")
-    add("**Status: FINAL (owner decision 1, 2026-10-26).** The required-arguments")
+    add("**Status: FINAL — required-arguments rule (2026-10-26).** The required-arguments")
     add("rule is the deterministic description-aware rule implemented in")
     add("`scripts/select_candidates.py` and reproduced here. The report keeps")
     add('the interim "no `default` key = required" heuristic as historical')
@@ -347,7 +347,7 @@ def render_markdown(
         f"| {_fmt(report.malformed_argument_rows)} |"
     )
     add(
-        "| **Malformed gold rows (final exclusion, decision 3)** "
+        "| **Malformed gold rows (final malformed-gold exclusion)** "
         f"| **{_fmt(report.malformed_gold_rows)}** |"
     )
     add(
@@ -529,7 +529,7 @@ def render_markdown(
     )
     dropped_text = ", ".join(f"`{tool}`" for tool in dropped) or "none"
 
-    add("## FINAL rule (owner decision 1, 2026-10-26)")
+    add("## FINAL required-arguments rule (2026-10-26)")
     add("")
     add(
         "The required-arguments rule is **description-aware refinement**. "

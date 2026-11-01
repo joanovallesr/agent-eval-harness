@@ -35,7 +35,7 @@ PINNED_REVISION=26d14ebfe18b1f7b524bd39b404b50af5dc97866
 
 ## License / republication verdict (drafted 2026-10-26; license verdict not yet verified)
 
-**Status: DRAFT — not a verdict.** Decision on 2026-10-26: the
+**Status: DRAFT — not a verdict.** Recorded on 2026-10-26: the
 **publication rule is approved; the license verdict is not**. The license
 verdict is not yet verified against the accepted terms, so do **not** publish
 raw dataset rows, queries, gold answers, full tool schemas, or traces that
@@ -80,7 +80,7 @@ publish links and aggregates only.
 - [ ] Whether model traces count as derivatives or redistribution.
 - [ ] Whether the APIGen citation belongs in the README, this file, or both.
 
-**Card/data discrepancy and interim filter (decision, 2026-10-26).**
+**Card/data discrepancy and interim filter (2026-10-26).**
 The public card describes a `required` boolean on each parameter, but the
 pinned revision's 362,482 parameter descriptors contain only `type`,
 `description`, and (optionally) `default`: **zero** have a `required` key. The

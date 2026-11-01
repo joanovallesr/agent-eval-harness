@@ -6,7 +6,7 @@ The §7 variance-components formula is fixed::
     u = sqrt((m - 1) / chi2.ppf(0.20, m - 1))
 
 where ``m`` is the number of dev tools in the leave-one-tool-out estimate.
-The final rule (owner decision 2, 2026-10-26) is **≥10 usable cases in the
+The final usable-cases rule for `m` (2026-10-26) is **≥10 usable cases in the
 actual Phase 3 dev sample**; this script reports how ``m`` and ``u`` move as
 the threshold rises, from non-candidate dev tools only. The printed numbers
 are full-dataset illustrations, not Phase-3 values. It makes no model call and

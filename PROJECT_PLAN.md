@@ -11,8 +11,7 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [ ] Read the dataset-card license AND the accepted use terms; record the
       verdict on trace republication in `data/README.md` before any dataset
       row appears on a public site or repo. (Phase F drafts the verdict from
-      the public card; the click-through terms still need the owner's
-      confirmation.)
+      the public card; the click-through terms still need confirmation.)
 - [x] Pivot the split unit from category to tool. Freeze the ordered list of
       12 candidate held-out tools — seed 42, sha256-hashed, committed in
       `docs/CANDIDATES.md`.
@@ -52,8 +51,8 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
       API usage**; per-run cost ceiling with loud abort; checkpoints; aborted
       runs recorded, not deleted.
 - [ ] `haiku-direct` and `sonnet-direct`: single-prompt, no-loop arms sharing
-      the pinned tool-use interface (EVAL_DESIGN §2). **Batch path deferred by
-      owner decision 2026-10-31 and out of scope for Phase 2; Phase 2 uses
+      the pinned tool-use interface (EVAL_DESIGN §2). **Batch path deferred on
+      2026-10-31 and out of scope for Phase 2; Phase 2 uses
       synchronous list-price accounting only (`pricing_basis: list_sync`).**
       (The EVAL_DESIGN §8 batch path remains a later-phase item.)
 - [ ] Set the provider-console spend limit (second line of defense) and

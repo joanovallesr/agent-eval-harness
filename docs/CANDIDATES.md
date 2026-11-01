@@ -223,8 +223,8 @@ fallback applies. Distractor exposure never consumes a spare.
 
 - No raw xLAM rows, queries, answers, or full tool schemas.
 - No license verdict: the publication rule is approved, the verdict is not.
-- No Phase-3 number for `m`, `u`, `C`, or `n_t`: decision 2 fixes the
-  **rule** (≥10 usable Phase-3 dev cases per dev tool), while the concrete
-  values require Phase 3 variance components.
+- No Phase-3 number for `m`, `u`, `C`, or `n_t`: the usable-cases rule for
+  `m` fixes the **rule** (≥10 usable Phase-3 dev cases per dev tool), while
+  the concrete values require Phase 3 variance components.
 - No test-split materialization and no pre-registration file or tag.
 - No re-roll: the seed, order, and sha256 are frozen.

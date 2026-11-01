@@ -330,7 +330,7 @@ renaming it.)
     `u = √((m−1)/χ²_{0.20, m−1})`, **m = number of dev tools in the LOTO
     estimate**. χ²_{0.20, m−1} denotes the lower-20% quantile
     (P(X ≤ x) = 0.20), so this is an 80% upper confidence limit.
-    **m is no longer 13.** **Final rule (decision 2, 2026-10-26):** `m`
+    **m is no longer 13.** **Final usable-cases rule for `m` (2026-10-26):** `m`
     is the count of dev tools (non-candidate tools) with **≥10 usable cases in
     the actual Phase 3 dev sample**, and `u` is recomputed from that `m` with
     the formula above. `m`, `u`, `C`, and `n_t` are **not locked by this

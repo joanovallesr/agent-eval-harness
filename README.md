@@ -132,7 +132,7 @@ are already included in `output_tokens` and are not added again. Batch rates
 are excluded. Cost is computed from logged usage, never from token estimates.
 
 Batch direct-prompt submission is **deferred and out of scope for Phase 2**
-(decision, 2026-10-31). All runs use synchronous list-price accounting
+(2026-10-31). All runs use synchronous list-price accounting
 (`pricing_basis: "list_sync"`); the design's batch path remains a later-phase
 item and is not mixed into the Phase-2 cost basis.
 
