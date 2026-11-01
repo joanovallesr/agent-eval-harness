@@ -77,8 +77,10 @@ pessimistic power check for a 6–8-tool test does not. A C of roughly 50 tools
 would be needed at this spread, which is outside the frozen 12-candidate list.
 
 The §7 fallback is therefore required in Phase 4: a wider margin justified a
-priori, lower power stated openly, or dropping the binary framing. I have not
-chosen a fallback here.
+priori, lower power stated openly, or dropping the binary framing. I did not
+choose a fallback in Stage 4. Phase 4 chose the third option — dropping the
+binary framing for an estimation-first claim; see the 2026-10-31 amendment in
+`docs/EVAL_DESIGN.md` and `docs/PRE_REGISTRATION.md`.
 
 ## Budget check at C = 8, n_t = 117, k = 1
 
@@ -136,4 +138,5 @@ was added.
 
 ## Status
 
-Stage 4 dry run is complete. Phase 4 (pre-registration) has not started.
+Stage 4 dry run is complete. Phase 4 has started: the pre-registration is
+drafted and committed, not tagged.

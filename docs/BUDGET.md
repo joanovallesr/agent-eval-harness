@@ -34,7 +34,13 @@ completed under its **$1.00** ceiling with **$0.095948** actual list-price
 spend. Stage 2 ceiling: **$1.03**; final spend: **$1.023421**. Stage 3 dev
 sample: final spend **$1.264953** against a **$1.50** ceiling. The ledger
 total is **$2.458041**. Chosen efforts: Haiku shared = **`low`**;
-Sonnet = **`api_default`**. Stage 4 has not started.
+Sonnet = **`api_default`**. Stage 4 is complete.
+
+The Phase 4 pre-registration is drafted but not tagged. It closes the
+inequality at C = 8, `n_t = 117`, k = 1: test spend **$3.288878**, reserve
+**$5.972325**, later-phase allowance **$2.000000**, and **$6.280757** of slack
+against the $20 hard cap. These are projections, not spend; the ledger above
+stays on actuals.
 
 Phase 2 mini-set smoke spend is pipeline validation, not a headline result. It
 counts against the $20 hard cap; subtract it alongside the inequality terms

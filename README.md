@@ -14,7 +14,8 @@ portfolios skip. This project proves it:
    held-out tools (the cluster and split unit; the paper's "categories" are
    descriptive only), and a Sonnet-5.5 direct-prompt comparison arm (a
    mid-tier model ~20x pricier per token — never called "frontier").
-   The locked claim is non-inferiority on accuracy at ≤ 1/10th the token cost.
+   The locked claim reports the paired accuracy difference as an estimate,
+   with cost parity as the only binary rule (95% upper bound ≤ 0.10).
 3. **Calibrated judge, scoped** — an LLM judge from a **different model family**
    (GPT-6 Luna) serves the secondary multi-step question only: blind labels,
    a tune/report split, κ with a confidence interval. A miss is a published
@@ -22,7 +23,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 3 Stage 4 dry run complete; Phase 4 not started
+## Status: Phase 3 complete; Phase 4 pre-registration drafted (not tagged)
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -45,7 +46,9 @@ k=1 — for **$1.264953** under its **$1.50** ceiling. Dev exact match was 0.825
 for both Haiku arms and 0.8194 for Sonnet; these are dev-only numbers. I ran
 the Stage 4 analysis dry run; the aggregate report is
 `docs/PHASE3_DEV_ANALYSIS.md`. The §7 power check does not pass at C in
-{6,7,8}. Phase 4 has not started, and no `docs/PRE_REGISTRATION.md` exists.
+{6,7,8}; the design is estimation-first per the 2026-10-31 amendment in
+`docs/EVAL_DESIGN.md`. Phase 4 has started: `docs/PRE_REGISTRATION.md` is
+drafted and committed, not tagged. No test rows have been materialized.
 
 ## Layout
 
@@ -76,6 +79,7 @@ agent-eval-harness/
 ├── PROJECT_PLAN.md   # phase-by-phase build sequence
 ├── docs/
 │   ├── EVAL_DESIGN.md      # the full eval plan — read this first
+│   ├── PRE_REGISTRATION.md # held-out claim, design, and budget (draft, untagged)
 │   ├── MATCH_SPEC.md       # sole authority on exact/partial scoring
 │   ├── CANDIDATES.md       # frozen held-out-tool candidates (seed + sha256)
 │   ├── REQUIRED_FILTER_AUDIT.md  # required-args audit (final rule)

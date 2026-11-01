@@ -4,8 +4,8 @@
 The Phase-0 verifier used to treat a parameter without a literal ``default``
 key as required. The pinned revision has **zero** ``required`` keys, while the
 public dataset card describes a required flag. This script measures what that
-interim assumption removes and reproduces the FINAL deterministic rule chosen
-under the final required-arguments rule: only a missing core input excludes a row.
+interim assumption removes and reproduces the FINAL deterministic
+required-arguments rule: only a missing core input excludes a row.
 
 It is offline: it reads the pinned dataset only. It makes no model call, runs
 no candidate tool, and writes no raw query, gold answer, or full tool schema.

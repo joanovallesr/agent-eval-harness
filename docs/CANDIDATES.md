@@ -1,9 +1,9 @@
 # Held-Out Tool Candidates (Phase 0 Freeze)
 
 Status: **frozen Phase-0 candidate list**. This is not pre-registration. The
-final C held-out tools are selected from this ordered list in Phase 4 (C ∈
-{6, 7, 8}, EVAL_DESIGN §7). The claim, margin, arms, and cost cap are locked
-elsewhere and are not decided here.
+final C held-out tools are selected from this ordered list in Phase 4; the
+2026-10-31 pre-registration sets C = 8. The claim, arms, and cost cap are
+locked elsewhere and are not decided here.
 
 - Frozen: **2026-10-26** (design pivot dated 2026-10-25).
 - Decision record: **2026-10-26**; see below.
@@ -223,8 +223,9 @@ fallback applies. Distractor exposure never consumes a spare.
 
 - No raw xLAM rows, queries, answers, or full tool schemas.
 - No license verdict: the publication rule is approved, the verdict is not.
-- No Phase-3 number for `m`, `u`, `C`, or `n_t`: the usable-cases rule for
-  `m` fixes the **rule** (≥10 usable Phase-3 dev cases per dev tool), while
-  the concrete values require Phase 3 variance components.
-- No test-split materialization and no pre-registration file or tag.
+- No Phase-0 number for `m`, `u`, `C`, or `n_t`. The usable-cases rule for
+  `m` is the ≥10 threshold; the concrete values are set in the
+  pre-registration from Phase 3 variance components.
+- No test-split materialization. The pre-registration file is drafted; no tag
+  is applied yet.
 - No re-roll: the seed, order, and sha256 are frozen.

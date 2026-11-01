@@ -116,8 +116,9 @@ at $0.50 / $2.50. Sonnet is $2.00 input / $10.00 output per MTok.
   test cases: 8 × 117 = 936. With three arms at k = 1, that is 2,808 arm-case
   runs.
 - **k = 1** repeat per arm per case.
-- The eight tools are drawn from the frozen 12-candidate order, seed 42,
-  sha256 `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`.
+- The eight tools are the first eight in the frozen 12-candidate order
+  (generated with seed 42), sha256
+  `6b822299090bda4e6dfca52b6db426b7b2b4b5dba14662505962145415623991`.
   The frozen order is not re-rolled.
 - Within each selected tool, test cases are a seeded uniform random sample of
   the eligible single-tool rows. The seed is 42 with the stage salt
@@ -125,36 +126,45 @@ at $0.50 / $2.50. Sonnet is $2.00 input / $10.00 output per MTok.
   rows are materialized only after this file is tagged, and their checksums
   are recorded in `data/README.md`.
 - No replacement is triggered at drafting: all eight tools clear the 100-case
-  floor and the 117-case target. If a selected tool leaked or fell below the
-  floor after a later filter, the next unused candidate in the frozen order
-  would replace it. Distractor exposure never consumes a spare. If
+  floor and meet the 117-case target. If a selected tool leaked or fell below
+  the floor after a later filter, the next unused candidate in the frozen
+  order would replace it. Distractor exposure never consumes a spare. If
   materialization changes any count, I will record the replacement and any
   change to `n_t` in this file before the tag; I will not lower `n_t` or swap
-  a tool after seeing test outputs.
+  a tool after seeing test outputs. Section 5 lists the four spares and their
+  counts; only `assess_diabetes_risk` has at least 117 usable cases, so a
+  replacement for one of the first eight would require a recorded `n_t`
+  decision before the tag, not a silent substitution.
 
-## 5. Usable-case check for the eight test tools
+## 5. Usable-case check for the twelve candidates and the eight test tools
 
 Counts are single-tool usable cases under the final filters: answer-tools only,
 structural row filters, malformed-gold exclusion, single-tool only, and the
 final description-aware required-arguments rule. I recomputed them from the
 pinned revision with `scripts/select_candidates.py`; the candidate counts are
 identical under the structural pool and after the required-arguments rule.
+Distractor rows are dev-eligible single-tool rows where the candidate appears
+in `tools` but not in `answers`.
 
-| # | Tool | Usable cases | n_t | Cases left unused |
-|---:|---|---:|---:|---:|
-| 1 | `calculate_standard_deviation` | 175 | 117 | 58 |
-| 2 | `average` | **117** | 117 | **0** |
-| 3 | `get_ip_location` | 127 | 117 | 10 |
-| 4 | `find_pairs_with_sum` | 128 | 117 | 11 |
-| 5 | `find_majority_element` | 124 | 117 | 7 |
-| 6 | `chi_square_independence_test` | 176 | 117 | 59 |
-| 7 | `calculate_quarterly_dividend` | 119 | 117 | 2 |
-| 8 | `calculate_investment_return` | 235 | 117 | 118 |
+| # | Tool | Usable cases | Distractor rows | Role | Cases left unused at n_t = 117 |
+|---:|---|---:|---:|---|---:|
+| 1 | `calculate_standard_deviation` | 175 | 295 | test | 58 |
+| 2 | `average` | **117** | 245 | test | **0** |
+| 3 | `get_ip_location` | 127 | 265 | test | 10 |
+| 4 | `find_pairs_with_sum` | 128 | 383 | test | 11 |
+| 5 | `find_majority_element` | 124 | 231 | test | 7 |
+| 6 | `chi_square_independence_test` | 176 | 250 | test | 59 |
+| 7 | `calculate_quarterly_dividend` | 119 | 213 | test | 2 |
+| 8 | `calculate_investment_return` | 235 | 240 | test | 118 |
+| 9 | `get_order` | 112 | 82 | spare | — |
+| 10 | `find_kth_smallest_number` | 114 | 239 | spare | — |
+| 11 | `auto_complete` | 106 | 74 | spare | — |
+| 12 | `assess_diabetes_risk` | 127 | 255 | spare | — |
 
-The minimum is 117, at `average`. No selected tool falls below 117, so the
-shortfall rule is not triggered. `average` sits exactly on the line and uses
-all 117 of its usable cases; it has no spare case within the tool. All eight
-tools clear the 100-case floor.
+The minimum among the eight test tools is 117, at `average`. No selected tool
+falls below 117, so the shortfall rule is not triggered. `average` sits
+exactly on the line and uses all 117 of its usable cases; it has no spare case
+within the tool. All eight test tools clear the 100-case floor.
 
 ## 6. Scoring
 
@@ -211,23 +221,9 @@ Pre-registered dataset exclusions, applied before the split is materialized:
 
 Malformed gold is excluded and counted, never scored 0. Distractor exposure —
 a candidate tool present in a row's `tools` list but not in its gold
-`answers` — is allowed, counted per candidate, and disclosed; it never
-triggers replacement. The leak check is zero candidate answer appearances in
-dev-eligible rows by construction.
-
-Distractor exposure for the eight selected tools, in dev-eligible single-tool
-rows (candidate present in `tools`, absent from `answers`):
-
-| Tool | Distractor rows |
-|---|---:|
-| `calculate_standard_deviation` | 295 |
-| `average` | 245 |
-| `get_ip_location` | 265 |
-| `find_pairs_with_sum` | 383 |
-| `find_majority_element` | 231 |
-| `chi_square_independence_test` | 250 |
-| `calculate_quarterly_dividend` | 213 |
-| `calculate_investment_return` | 240 |
+`answers` — is allowed, counted per candidate, and disclosed in section 5; it
+never triggers replacement. The leak check is zero candidate answer
+appearances in dev-eligible rows by construction.
 
 ## 8. Analysis plan and Stage 4 dry run
 
@@ -274,7 +270,10 @@ recomputed from that `m` with
 | `n_t` | **117** |
 | `s_pess` | **0.123302** |
 
-`n_t` uses the locked within-tool rule, applied per tool and then maximized:
+`n_t` uses the locked within-tool rule, applied per tool and then maximized.
+EVAL_DESIGN §7 defines one `n_t` as the max of the per-tool requirements, so
+the maximum per-tool variance governs; the pooled `σ²_within` is a summary,
+not the sizing input.
 
 ```
 n_t = max_t ceil(4 · σ²_within,t / τ̂²_pessimistic), floor 100
@@ -303,16 +302,16 @@ recomputed at dev-measured list-price rates per case:
 
 | Arm | Cost per case |
 |---|---:|
-| `haiku-agent` | $0.00016214 |
-| `haiku-direct` | $0.00016127 |
-| `sonnet-direct` | $0.00319034 |
-| All three arms | $0.00351376 |
+| `haiku-agent` | $0.0001621436 |
+| `haiku-direct` | $0.0001612700 |
+| `sonnet-direct` | $0.0031903444 |
+| All three arms | $0.0035137581 |
 
 At C = 8, `n_t = 117`, k = 1:
 
-- Test spend = 8 × 117 × $0.00351376 = **$3.288878**.
+- Test spend = 8 × 117 × $0.0035137581 = **$3.288878**.
 - Test reserve = one aborted-and-resumed run on the most expensive arm,
-  `2 × 8 × 117 × $0.00319034` = **$5.972325**.
+  `2 × 8 × 117 × $0.0031903444` = **$5.972325**.
 - Later-phase allowance = **$2.000000** for judge, multi-step traces, and CI;
   the optional Opus spot check is droppable. No later-phase spend has
   occurred.
@@ -328,8 +327,9 @@ The inequality closes on actuals:
 
 Per-arm test spend is $0.151766 for `haiku-agent`, $0.150949 for
 `haiku-direct`, and $2.986162 for `sonnet-direct`, totaling $3.288878. Costs
-come from logged API usage, never token estimates. The run aborts loudly at
-its cost ceiling.
+come from logged API usage, never token estimates. Totals are computed from
+the unrounded dev-measured rates; the table and per-arm figures are rounded to
+six decimals. The run aborts loudly at its cost ceiling.
 
 ## 11. Run discipline and abort rule
 

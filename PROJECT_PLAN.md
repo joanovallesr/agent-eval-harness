@@ -86,17 +86,19 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
       leave-one-tool-out s_tool spread, m = dev tools, u).
 
 ## Phase 4 — Pre-registration + split freeze
-- [ ] Write `docs/PRE_REGISTRATION.md` (contents per EVAL_DESIGN §13):
-      hypothesis, margin, assumed gap, cost definition, model IDs, effort
-      values, prompt versions, tool schemas, `max_tokens`, match-spec version
-      (v1.1), k per arm with the **closed budget arithmetic**, analysis plan,
-      primary vs secondary comparisons, failure policy, sampling seed, the 12
-      ordered candidates, distractor exposure, and the leak-check result.
+- [ ] Write `docs/PRE_REGISTRATION.md` (contents per EVAL_DESIGN §13, read
+      through the 2026-10-31 estimation-first amendment): the estimation-first
+      claim and estimand, the binary cost rule, cost definition, model IDs,
+      effort values, prompt versions, tool schemas, `max_tokens`, match-spec
+      version (v1.1), k per arm with the **closed budget arithmetic**,
+      analysis plan, primary vs secondary comparisons, failure policy, sampling
+      seed, the 12 ordered candidates, distractor exposure, and the leak-check
+      result.
 - [ ] Commit **and git-tag** it. The tag is the proof of "dated and committed."
 - [ ] Materialize the test rows deterministically from the Phase-0 seeds
-      (C from {6, 7, 8} chosen on the leave-one-tool-out estimate, selected
-      from the frozen 12 candidate tools); verify the sizing target on
-      post-filter usable rows; record checksums in `data/README.md`.
+      (C = 8, chosen for interval precision and selected from the frozen 12
+      candidate tools as the first eight in order); verify the sizing target
+      on post-filter usable rows; record checksums in `data/README.md`.
       Record C and its reason in `PRE_REGISTRATION.md` **before** the tag —
       it is not chosen at materialization.
 - [ ] Measurable: tag exists; test split checksums in `data/README.md`.
