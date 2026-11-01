@@ -226,6 +226,7 @@ fallback applies. Distractor exposure never consumes a spare.
 - No Phase-0 number for `m`, `u`, `C`, or `n_t`. The usable-cases rule for
   `m` is the ≥10 threshold; the concrete values are set in the
   pre-registration from Phase 3 variance components.
-- No test-split materialization. The pre-registration file is drafted; no tag
-  is applied yet.
+- No test-split rows in this Phase-0 record. The Phase 4 sample is
+  materialized in the gitignored `data/phase3/test.jsonl`; the tag is
+  `pre-registration-v1`.
 - No re-roll: the seed, order, and sha256 are frozen.

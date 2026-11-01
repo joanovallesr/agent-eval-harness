@@ -138,5 +138,6 @@ was added.
 
 ## Status
 
-Stage 4 dry run is complete. Phase 4 has started: the pre-registration is
-drafted and committed, not tagged.
+Stage 4 dry run is complete. Phase 4 is complete: the pre-registration is
+tagged `pre-registration-v1` and the test sample is materialized. The test run
+is Phase 6.

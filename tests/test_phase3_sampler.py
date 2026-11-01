@@ -41,6 +41,9 @@ GAMMA = tool(
     },
 )
 CANDIDATE = tool("average", {"xs": {"type": "array", "description": "Numbers."}})
+OTHER_CANDIDATE = tool(
+    "get_order", {"order_id": {"type": "string", "description": "Order ID."}}
+)
 
 
 def synthetic_rows() -> list[dict]:
@@ -171,6 +174,77 @@ def test_sampling_a_dev_shape_keeps_tools_and_case_counts():
             seed=43,
             n_tools=3,
             cases_per_tool=3,
+        )
+
+
+def test_test_stage_keeps_held_out_candidate_answers_and_counts_distractors():
+    rows = [
+        row(
+            f"average {index}",
+            [{"name": "average", "arguments": {"xs": [index]}}],
+            [CANDIDATE, OTHER_CANDIDATE],
+        )
+        for index in range(3)
+    ] + [
+        row("alpha", [{"name": "alpha", "arguments": {"a": 1}}], [ALPHA]),
+    ]
+    report = apply_final_filters(
+        rows,
+        held_out_tools=frozenset({"average"}),
+    )
+
+    assert set(report["by_tool"]) == {"average"}
+    assert len(report["by_tool"]["average"]) == 3
+    assert report["counts"]["eligible_single_tool_test"] == 3
+    # The held-out gold tool is not a distractor; the other candidate is.
+    assert report["distractor_rows"]["get_order"] == 3
+    assert report["distractor_cases"]["get_order"] == 3
+
+    sampled = sample_stage(
+        report["by_tool"],
+        stage="test",
+        seed=42,
+        n_tools=1,
+        cases_per_tool=2,
+        tools=("average",),
+    )
+    assert sampled["n_tools"] == 1
+    assert sampled["n_cases"] == 2
+    assert sampled["tool_distribution"] == {"average": 2}
+    assert all(case["tool_name"] == "average" for case in sampled["cases"])
+
+    metadata = sample_metadata(
+        stage="test",
+        seed=42,
+        revision="test-revision",
+        filter_report=report,
+        sample=sampled,
+    )
+    assert metadata["distractor_exposure_sample"]["get_order"] == 2
+    assert "average" not in metadata["distractor_exposure_sample"]
+
+
+def test_test_stage_requires_the_fixed_tool_count():
+    report = apply_final_filters(
+        [
+            row(
+                "average",
+                [{"name": "average", "arguments": {"xs": [1]}}],
+                [CANDIDATE],
+            )
+        ],
+        held_out_tools=frozenset({"average"}),
+    )
+    assert set(report["by_tool"]) == {"average"}
+
+    with pytest.raises(ValueError):
+        sample_stage(
+            report["by_tool"],
+            stage="test",
+            seed=42,
+            n_tools=2,
+            cases_per_tool=1,
+            tools=("average",),
         )
 
 

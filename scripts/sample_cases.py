@@ -39,6 +39,10 @@ from select_candidates import (
 DEFAULT_CASE_DIR = Path("data/phase3")
 DEFAULT_SEED = 42
 CANDIDATE_SET = frozenset(FROZEN_CANDIDATES)
+# The 2026-10-31 pre-registration fixes the test set at C = 8 and n_t = 117.
+TEST_TOOLS = tuple(FROZEN_CANDIDATES[:8])
+TEST_N_T = 117
+PRE_REGISTRATION_TAG = "pre-registration-v1"
 
 
 def _read_json(value: Any) -> Any:
@@ -152,8 +156,15 @@ def apply_final_filters(
     *,
     revision: str = PINNED_REVISION,
     candidates: frozenset[str] = CANDIDATE_SET,
+    held_out_tools: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    """Apply every final filter and return dev-eligible single-tool cases."""
+    """Apply every final filter and return eligible single-tool cases.
+
+    With ``held_out_tools=None`` this is the dev path: candidate answer rows
+    are excluded. With ``held_out_tools`` set, only single-tool rows whose gold
+    tool is in that set are retained, including candidate answer rows; this is
+    the test path.
+    """
 
     counts: Counter = Counter()
     by_tool: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -218,9 +229,16 @@ def apply_final_filters(
             continue
 
         tool = next(iter(names))
-        if tool in candidates:
+        if held_out_tools is not None:
+            if tool not in held_out_tools:
+                counts["not_test_tool_rows"] += 1
+                continue
+            counts["eligible_single_tool_test"] += 1
+        elif tool in candidates:
             counts["candidate_answer_rows"] += 1
             continue
+        else:
+            counts["eligible_single_tool_non_candidate"] += 1
 
         # Distractor exposure is disclosed, never filtered.
         exposed = [
@@ -249,7 +267,6 @@ def apply_final_filters(
         by_tool[tool].append(case)
         for candidate in exposed:
             distractor_cases[candidate] += 1
-        counts["eligible_single_tool_non_candidate"] += 1
 
     counts["tools_with_eligible_cases"] = len(by_tool)
     return {
@@ -268,23 +285,51 @@ def sample_stage(
     seed: int,
     n_tools: int,
     cases_per_tool: int,
+    tools: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Seeded stratified sample: same cases for every arm in the stage."""
+    """Seeded stratified sample: same cases for every arm in the stage.
+
+    When ``tools`` is given, those tools are fixed and only the cases are
+    sampled. The test stage uses this path so the pre-registered tool order is
+    not re-rolled.
+    """
 
     if n_tools < 1 or cases_per_tool < 1:
         raise ValueError("n_tools and cases_per_tool must be >= 1")
     rng = random.Random(f"{seed}:{stage}")
-    eligible = sorted(
-        tool
-        for tool, cases in by_tool.items()
-        if len(cases) >= cases_per_tool
-    )
-    if len(eligible) < n_tools:
-        raise ValueError(
-            f"{stage}: {len(eligible)} tools have >= {cases_per_tool} cases; "
-            f"need {n_tools}"
+    if tools is not None:
+        chosen_tools = list(tools)
+        if len(set(chosen_tools)) != len(chosen_tools):
+            raise ValueError("fixed tools must be unique")
+        if n_tools != len(chosen_tools):
+            raise ValueError(
+                f"{stage}: n_tools {n_tools} != fixed tools {len(chosen_tools)}"
+            )
+        missing = [tool for tool in chosen_tools if tool not in by_tool]
+        if missing:
+            raise ValueError(f"{stage}: missing fixed tools: {missing}")
+        short = [
+            tool
+            for tool in chosen_tools
+            if len(by_tool[tool]) < cases_per_tool
+        ]
+        if short:
+            raise ValueError(
+                f"{stage}: tools with fewer than {cases_per_tool} cases: "
+                f"{short}"
+            )
+    else:
+        eligible = sorted(
+            tool
+            for tool, cases in by_tool.items()
+            if len(cases) >= cases_per_tool
         )
-    chosen_tools = sorted(rng.sample(eligible, n_tools))
+        if len(eligible) < n_tools:
+            raise ValueError(
+                f"{stage}: {len(eligible)} tools have >= {cases_per_tool} cases; "
+                f"need {n_tools}"
+            )
+        chosen_tools = sorted(rng.sample(eligible, n_tools))
     cases: list[dict[str, Any]] = []
     distribution: dict[str, int] = {}
     for tool in chosen_tools:
@@ -314,9 +359,11 @@ def sample_metadata(
         offered = {
             tool["name"] for tool in case["tools"] if isinstance(tool, dict)
         }
+        # The gold tool is offered too, but it is not a distractor.
+        offered.discard(case["tool_name"])
         for candidate in CANDIDATE_SET.intersection(offered):
             distractor_sample[candidate] += 1
-    return {
+    metadata = {
         "stage": stage,
         "seed": seed,
         "seed_salt": f"{seed}:{stage}",
@@ -341,9 +388,6 @@ def sample_metadata(
         "distractor_exposure_all_rows": dict(
             filter_report.get("distractor_all_rows", {})
         ),
-        "distractor_exposure_dev_eligible_single_tool": dict(
-            filter_report["distractor_rows"]
-        ),
         "distractor_exposure_sample": dict(distractor_sample),
         "n_cases": sample["n_cases"],
         "n_tools": sample["n_tools"],
@@ -353,6 +397,13 @@ def sample_metadata(
         "tool_distribution": dict(sorted(sample["tool_distribution"].items())),
         "contains_raw_rows": False,
     }
+    eligible_key = (
+        "distractor_exposure_test_eligible_single_tool"
+        if stage == "test"
+        else "distractor_exposure_dev_eligible_single_tool"
+    )
+    metadata[eligible_key] = dict(filter_report["distractor_rows"])
+    return metadata
 
 
 def write_stage(
@@ -364,14 +415,20 @@ def write_stage(
     cases_per_tool: int,
     out_dir: Path = DEFAULT_CASE_DIR,
     revision: str = PINNED_REVISION,
+    tools: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    filter_report = apply_final_filters(rows, revision=revision)
+    filter_report = apply_final_filters(
+        rows,
+        revision=revision,
+        held_out_tools=frozenset(tools) if tools is not None else None,
+    )
     sample = sample_stage(
         filter_report["by_tool"],
         stage=stage,
         seed=seed,
         n_tools=n_tools,
         cases_per_tool=cases_per_tool,
+        tools=tools,
     )
     metadata = sample_metadata(
         stage=stage,
@@ -389,6 +446,12 @@ def write_stage(
     metadata = dict(metadata)
     metadata["case_file"] = str(case_path)
     metadata["metadata_file"] = str(metadata_path)
+    metadata["case_file_sha256"] = hashlib.sha256(
+        case_path.read_bytes()
+    ).hexdigest()
+    if tools is not None:
+        metadata["test_tools"] = list(tools)
+        metadata["pre_registration_tag"] = PRE_REGISTRATION_TAG
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
     return metadata
 
@@ -416,7 +479,7 @@ def load_rows_from_cache(revision: str = PINNED_REVISION, split: str = "train"):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--stage", required=True, choices=("pilot", "effort", "dev")
+        "--stage", required=True, choices=("pilot", "effort", "dev", "test")
     )
     parser.add_argument("--n-tools", type=int, required=True)
     parser.add_argument("--cases-per-tool", type=int, required=True)
@@ -425,6 +488,15 @@ def main() -> int:
     parser.add_argument("--split", default="train")
     parser.add_argument("--out-dir", default=str(DEFAULT_CASE_DIR))
     args = parser.parse_args()
+
+    tools = TEST_TOOLS if args.stage == "test" else None
+    if args.stage == "test":
+        if args.seed != DEFAULT_SEED:
+            parser.error(f"test stage is fixed at seed {DEFAULT_SEED}")
+        if args.n_tools != len(TEST_TOOLS):
+            parser.error(f"test stage is fixed at {len(TEST_TOOLS)} tools")
+        if args.cases_per_tool != TEST_N_T:
+            parser.error(f"test stage is fixed at n_t = {TEST_N_T}")
 
     rows = load_rows_from_cache(args.revision, args.split)
     metadata = write_stage(
@@ -435,6 +507,7 @@ def main() -> int:
         cases_per_tool=args.cases_per_tool,
         out_dir=Path(args.out_dir),
         revision=args.revision,
+        tools=tools,
     )
     printable = {
         key: metadata[key]
@@ -450,6 +523,7 @@ def main() -> int:
             "required_core_input_excluded_single_tool",
             "distractor_exposure_all_rows",
             "distractor_exposure_dev_eligible_single_tool",
+            "distractor_exposure_test_eligible_single_tool",
             "distractor_exposure_sample",
             "n_cases",
             "n_tools",
@@ -457,7 +531,11 @@ def main() -> int:
             "tool_distribution",
             "case_file",
             "metadata_file",
+            "case_file_sha256",
+            "test_tools",
+            "pre_registration_tag",
         )
+        if key in metadata
     }
     print(json.dumps(printable, indent=2, sort_keys=True))
     return 0

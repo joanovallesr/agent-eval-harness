@@ -119,8 +119,47 @@ required-arguments heuristic gives a diagnostic 63-tool all-filter pool. All
 | `multistep_labels_tune.jsonl` | ~30 blind human labels (judge tuning) |
 | `multistep_labels_report.jsonl` | ~30 blind human labels (judge report — untouched until final) |
 
-Record sha256 checksums here once the files are frozen:
+## Phase 4 test sample (materialized 2026-10-31)
+
+The held-out sample is materialized from the pinned revision after the
+pre-registration tag. The rows stay gitignored; only aggregates, tool names,
+and checksums are recorded here.
+
+- Pre-registration tag: `pre-registration-v1`
+- Stage: `test`; seed **42**; stage salt **`42:test`**
+- Tools: the first 8 in the frozen candidate order
+- Cases: **936** = 8 tools × **117** cases per tool
+- Sample file: `data/phase3/test.jsonl` (gitignored)
+- Metadata file: `data/phase3/test.meta.json` (gitignored)
+
+Selected tools: `calculate_standard_deviation`, `average`,
+`get_ip_location`, `find_pairs_with_sum`, `find_majority_element`,
+`chi_square_independence_test`, `calculate_quarterly_dividend`,
+`calculate_investment_return`.
+
+Checksums:
 
 ```
-# TODO(phase-4): paste checksums after freezing the splits
+ddd23366eabb1f9bf148d7c129c789073c54caa6d0a6521b50cba3d51cb5dc06  data/phase3/test.jsonl
+b64a5f99a8a54645aad2671a748c9047ac58fa892bf0b4e0d7c484c1689de7ae  data/phase3/test.meta.json
 ```
+
+Verification: every tool has exactly 117 cases; duplicate case IDs = **0**;
+every case's gold tool is its single gold answer tool and is one of the eight
+pre-registered tools.
+
+Distractor exposure: a candidate tool present in a case's `tools` list but
+not in its gold `answers`. Counts are per candidate across the 936 sampled
+cases; the eligible-row column is the same count across all 1,201 eligible
+test rows before sampling.
+
+| Candidate | Sampled cases | Eligible rows |
+|---|---:|---:|
+| `assess_diabetes_risk` | 6 | 6 |
+| `average` | 20 | 29 |
+| `calculate_investment_return` | 18 | 21 |
+| `calculate_quarterly_dividend` | 4 | 5 |
+| `calculate_standard_deviation` | 3 | 4 |
+| `chi_square_independence_test` | 15 | 17 |
+| `find_kth_smallest_number` | 7 | 9 |
+| `find_pairs_with_sum` | 14 | 27 |
