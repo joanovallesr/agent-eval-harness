@@ -5,6 +5,45 @@ The eval plan for the Agent + Eval Harness. Locked by a grill session on
 document, not the other way around. Anything that changes a locked decision
 re-opens the grill for that branch.
 
+## Amendment — 2026-10-31: estimation-first primary claim
+
+This amendment is part of the design record. It does not rewrite the text
+below; it records what changed after the Stage 4 analysis dry run and why.
+
+**What forced it.** The Stage 4 dry run (`docs/PHASE3_DEV_ANALYSIS.md`)
+measured `τ̂² = 0.0110690`, `σ²_within = 0.0449495`, `m = 30`, `u = 1.135922`,
+and `s_pess = 0.123302`. The §7 power check for a binary non-inferiority
+verdict at a −5-point margin allows `s_pess` of 0.035092 at C = 6, 0.039458 at
+C = 7, and 0.043372 at C = 8. All three fail. Even C = 12 fails, and roughly
+49–50 tools would be needed at this spread — outside the frozen 12-candidate
+list. Growing `n_t` cannot fix it because the between-tool variance component
+dominates.
+
+**What changes.** I dropped the binary non-inferiority framing. The study is
+estimation-first:
+
+- **Primary output:** the paired mean difference (`haiku-agent` minus
+  `sonnet-direct`), equal-weighted over the C test tools, reported as an
+  estimate with its clustered t-interval. There is no pass/fail verdict on
+  accuracy and no non-inferiority margin. The estimand is
+  `d̄ = (1/C)·Σ_t d_t`, where `d_t` is the mean paired difference in tool `t`
+  over `n_t` cases, repeats averaged within a case first.
+- **Cost claim:** binary. Cost parity is declared if and only if the upper
+  bound of the 95% cost-ratio interval is ≤ 0.10.
+- **Design:** C = 8, the largest value in the locked set, chosen for interval
+  precision now that the power rule no longer selects C; the first 8 tools in
+  the frozen candidate order; `n_t = 117` from the locked within-tool rule;
+  k = 1; `haiku-agent` and `haiku-direct` at effort `low`, `sonnet-direct` at
+  `api_default`; model IDs and list prices as pinned in
+  `config/pricing.list_sync.2026-10-31.json`.
+
+**How to read the rest of this document.** The §0 required-contents list,
+§1's non-inferiority declaration, §7's power-based C-selection and
+non-inferiority rule, §11's margin-based definition of a negative result, and
+§13's margin/hypothesis items are read through this amendment where they
+differ. `docs/PRE_REGISTRATION.md`, once committed and tagged, governs over
+this document where they differ.
+
 ## 0. Pre-registration — read first
 
 Nothing is run on the held-out set until `docs/PRE_REGISTRATION.md` is
