@@ -26,7 +26,7 @@ use list-price token costs; actual spend is reported separately.
 | opus_spot (~50 cases, optional) | — | — | only if budget allows |
 | ci_spend | — | — | ~$0.05 per 50-case Haiku gate run |
 | reserve (1 aborted+resumed test run) | — | — | most expensive arm |
-| **test_spend** | — | — | `C · n_t · k · measured_cost/case` |
+| **test_spend** | $3.288878 (pre-registered) | $3.050689 | list_sync; 936 cases × 3 arms, k = 1; actual ledger row |
 
 Phase 3 offline tooling (Task 0 resume fix + Task A sampling/analysis/effort
 plumbing) completed with **$0.000000** model spend. The Stage 1 pilot then
@@ -69,3 +69,11 @@ when checking remaining budget.
 
 Second line of defense: a provider-console spend limit (set up in Phase 2).
 The harness per-run ceiling is the third.
+
+## Phase 6 held-out actuals
+
+I completed the held-out run in one pass with no aborted cases. Test spend is **$3.050689** against the pre-registered projection of **$3.288878**. The new ledger total is **$6.816581** of the **$20.00** hard cap. I still hold the **$5.972325** reserve; the remaining slack is **$7.211094**.
+
+```text
+20.00 − 6.816581 (ledger through Phase 6) − 5.972325 (reserve) = 7.211094 ≥ 0  ✓
+```

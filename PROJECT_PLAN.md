@@ -125,12 +125,14 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [x] Measurable: calibration report committed; judge prompt versioned.
 
 ## Phase 6 — Held-out run + report
-- [ ] Run the held-out set **once** (it's the test set — no tuning on it).
-- [ ] Fill in `docs/RESULTS.md`: paired interval, cost ratio, CIs, negative
+- [x] Run the held-out set **once** (it's the test set — no tuning on it).
+      Completed in one pass with no aborted cases and no restarts.
+- [x] Fill in `docs/RESULTS.md`: paired interval, cost ratio, CIs, negative
       results at equal prominence, mandatory limitations section.
-- [ ] README summary table **generated** from the same results JSON.
+- [x] README summary table **generated** from the same results JSON.
 - [ ] Update the resume line from "(in progress)" to shipped numbers.
-- [ ] Measurable: RESULTS.md committed; resume updated.
+      A draft bullet is supplied in the Phase 6 report; I place it myself.
+- [x] Measurable: RESULTS.md committed; resume draft supplied.
 
 ## Phase 7 — CI gate
 - [x] `.github/workflows/ci.yml` runs Ruff + pytest on every push/PR (offline

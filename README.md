@@ -25,7 +25,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 5 complete (judge calibration negative result); test run not started
+## Status: Phase 6 complete (held-out run and report); Phase 5 judge miss reported
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -51,7 +51,10 @@ the Stage 4 analysis dry run; the aggregate report is
 {6,7,8}; the design is estimation-first per the 2026-10-31 amendment in
 `docs/EVAL_DESIGN.md`. Phase 4 is complete: `docs/PRE_REGISTRATION.md` is
 tagged `pre-registration-v1`, and the test sample is materialized as 936
-cases (8 tools × 117). The test run itself is Phase 6 and has not started.
+cases (8 tools × 117). Phase 6 is complete: the held-out run finished in one
+pass with no aborted cases, and the generated results table below and
+`docs/RESULTS.md` carry the estimate, intervals, cost verdict, per-tool
+table, and failure taxonomy.
 
 Phase 5 Part 1 is complete: the 30-task hand-written multi-step set with
 scripted mock results is tracked in `data/multistep.jsonl`, and the final
@@ -91,7 +94,8 @@ agent-eval-harness/
 │   ├── select_candidates.py  # reproducible Phase-0 candidate verifier
 │   ├── audit_required_filter.py  # final required-args rule audit
 │   ├── audit_variance_m.py   # §7 m/u usable-cases sensitivity
-│   └── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
+│   ├── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
+│   └── phase6_report.py      # one-source Phase-6 analysis + doc generator
 ├── data/
 │   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
 │   ├── multistep.jsonl # tracked hand-written Phase-5 set (30 tasks)
@@ -107,6 +111,7 @@ agent-eval-harness/
 │   ├── MULTISTEP_RUBRIC.md # Phase-5 blind labeling rubric (v1)
 │   ├── PHASE5_MULTISTEP.md # Phase-5 task set, traces, and packet
 │   ├── PHASE5_CALIBRATION.md # Phase-5 judge calibration and κ result
+│   ├── RESULTS.md          # Phase-6 held-out results (generated)
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
 ```
@@ -274,3 +279,30 @@ The private mapping stays outside the packet.
   counted and disclosed, not banned (`docs/CANDIDATES.md`).
 - `docs/FAILURE_TAXONOMY.md` is a descriptive diagnostic vocabulary, not a
   filter or an exclusion list.
+
+<!-- PHASE6-RESULTS:START -->
+## Held-out results (Phase 6)
+
+I ran one pre-registered pass over 936 cases (8 tools × 117), k = 1, MATCH_SPEC v1.1. Accuracy is an estimate, not a pass/fail verdict. Cost parity is the one binary rule.
+
+| Question | Result |
+|---|---|
+| Primary: haiku-agent − sonnet-direct | **-4.06 pts** [-13.10, +4.98] (tool-clustered t, df 7) |
+| Secondary: haiku-direct − sonnet-direct | **-4.27 pts** [-12.97, +4.43] (estimate and interval only) |
+| Cost ratio, haiku-agent / sonnet-direct | **[0.048392, 0.055169]**, threshold 0.10 → **parity holds** |
+| Phase 5 judge calibration | κ **undefined** (one-class labels), raw agreement 30/30, n = 30 traces over 15 tasks, ship rule **not met** |
+
+Full report: `docs/RESULTS.md`.
+<!-- PHASE6-RESULTS:END -->
+
+The held-out run's raw outputs stay gitignored. The committed report, the
+table above, and the Phase 6 budget actuals are generated from the run's
+`results.json` by:
+
+```bash
+PYTHONPATH=src:scripts python scripts/phase6_report.py \
+  --run-dir results/phase6-heldout-20261031 \
+  --analysis-out results/phase6-heldout-20261031/analysis.json
+```
+
+This is a local post-run step; CI does not need the raw results.
