@@ -60,7 +60,7 @@ pass with no aborted cases, and the generated results table below and
 table, and failure taxonomy.
 
 Phase 5 Part 1 is complete: the 30-task hand-written multi-step set with
-scripted mock results is tracked in `data/multistep.jsonl`, and the final
+scripted mock results is tracked in `data/multistep.jsonl` and the final
 60-trace run (two loop arms, no direct arm) completed with no truncations,
 format failures, or fixture misses. Trace spend is **$1.287014**. Phase 5
 Part 2 is complete: I labeled all 60 traces blind, the judge agreed 30/30 on
