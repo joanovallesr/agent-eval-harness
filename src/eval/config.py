@@ -88,6 +88,24 @@ MINI_SET_LABEL = "mini/smoke"
 MINI_SET_DEV_VS_FINAL = "mini_smoke"
 MINI_SET_PATH = "data/miniset.jsonl"
 
+# Phase 5 multi-step traces. These arms are separate from the pre-registered
+# headline arms: the multi-step question has no direct arm by construction.
+MULTISTEP_ARMS = ("haiku-agent", "sonnet-agent")
+MULTISTEP_ARM_MODEL_KEYS = {
+    "haiku-agent": "haiku",
+    "sonnet-agent": "sonnet",
+}
+MULTISTEP_EFFORT_BY_ARM = {
+    "haiku-agent": "low",
+    "sonnet-agent": "api_default",
+}
+MULTISTEP_PROMPT_VERSION = "phase5-multistep-v1"
+MULTISTEP_MAX_STEPS = 8
+MULTISTEP_MAX_TOKENS = 1024
+MULTISTEP_SET_PATH = "data/multistep.jsonl"
+MULTISTEP_LABEL = "phase5/multistep"
+MULTISTEP_DEV_VS_FINAL = "multistep_traces"
+
 
 def model_id_for(arm: str) -> str:
     if arm not in ARM_MODEL_KEYS:
@@ -99,6 +117,18 @@ def effort_for(arm: str) -> str:
     if arm not in EFFORT_BY_ARM:
         raise KeyError(f"unknown arm {arm!r}")
     return EFFORT_BY_ARM[arm]
+
+
+def multistep_model_id_for(arm: str) -> str:
+    if arm not in MULTISTEP_ARM_MODEL_KEYS:
+        raise KeyError(f"unknown multi-step arm {arm!r}")
+    return MODEL_IDS[MULTISTEP_ARM_MODEL_KEYS[arm]]
+
+
+def multistep_effort_for(arm: str) -> str:
+    if arm not in MULTISTEP_EFFORT_BY_ARM:
+        raise KeyError(f"unknown multi-step arm {arm!r}")
+    return MULTISTEP_EFFORT_BY_ARM[arm]
 
 
 def effort_request_params(effort: str) -> dict[str, dict[str, str]]:
@@ -214,6 +244,15 @@ __all__ = [
     "MODEL_IDS",
     "MODEL_IDS_VERIFIED",
     "MODEL_ID_STATUS",
+    "MULTISTEP_ARMS",
+    "MULTISTEP_ARM_MODEL_KEYS",
+    "MULTISTEP_DEV_VS_FINAL",
+    "MULTISTEP_EFFORT_BY_ARM",
+    "MULTISTEP_LABEL",
+    "MULTISTEP_MAX_STEPS",
+    "MULTISTEP_MAX_TOKENS",
+    "MULTISTEP_PROMPT_VERSION",
+    "MULTISTEP_SET_PATH",
     "PROMPT_VERSION",
     "PricingError",
     "TokenPrice",
@@ -221,6 +260,8 @@ __all__ = [
     "effort_is_transmitted",
     "effort_request_params",
     "model_id_for",
+    "multistep_effort_for",
+    "multistep_model_id_for",
     "select_shared_haiku_effort",
     "select_sonnet_effort",
     "pricing_for",
