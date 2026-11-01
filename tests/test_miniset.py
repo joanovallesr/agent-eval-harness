@@ -11,6 +11,7 @@ from eval.mini_set import (
     CANDIDATE_TOOLS,
     MiniCase,
     MiniSetError,
+    is_test_subset,
     load_and_validate,
     load_cases,
     validate_case,
@@ -120,6 +121,69 @@ def test_loader_rejects_held_out_candidate_tool():
 
     with pytest.raises(MiniSetError, match="held-out candidate"):
         validate_case(case)
+
+
+def test_test_stage_allows_candidate_gold_but_mini_stage_does_not():
+    schema = {
+        "type": "object",
+        "properties": {
+            "numbers": {"type": "array", "items": {"type": "number"}}
+        },
+        "required": ["numbers"],
+    }
+    case = MiniCase(
+        id="test-candidate-gold",
+        query="Average these.",
+        tools=("average",),
+        answers=json.dumps(
+            [{"name": "average", "arguments": {"numbers": [1, 2, 3]}}]
+        ),
+        tool_definitions=(
+            {
+                "name": "average",
+                "description": "Average numbers.",
+                "input_schema": schema,
+            },
+        ),
+    )
+
+    with pytest.raises(MiniSetError, match="held-out candidate"):
+        validate_case(case)
+
+    validate_case(case, test_split=True)
+
+
+def test_test_stage_allows_schema_invalid_gold_but_mini_stage_does_not():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}},
+        "required": ["a"],
+    }
+    case = MiniCase(
+        id="test-schema-invalid-gold",
+        query="Use alpha.",
+        tools=("alpha",),
+        answers=json.dumps([{"name": "alpha", "arguments": {"a": "not-int"}}]),
+        tool_definitions=(
+            {"name": "alpha", "description": "Alpha.", "input_schema": schema},
+        ),
+    )
+
+    with pytest.raises(MiniSetError, match="violates its schema"):
+        validate_case(case)
+
+    validate_case(case, test_split=True)
+
+
+def test_is_test_subset_reads_stage_from_sibling_metadata(tmp_path: Path):
+    sample = tmp_path / "sample.jsonl"
+    sample.write_text("")
+    (tmp_path / "sample.meta.json").write_text(json.dumps({"stage": "test"}))
+
+    assert is_test_subset(sample) is True
+
+    (tmp_path / "sample.meta.json").write_text(json.dumps({"stage": "dev"}))
+    assert is_test_subset(sample) is False
 
 
 def test_loader_rejects_gold_tool_that_is_not_offered():

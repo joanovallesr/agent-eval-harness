@@ -183,8 +183,38 @@ def _schema_for(case: MiniCase, name: str) -> dict[str, Any]:
     return TOOLS_BY_NAME[name]["input_schema"]
 
 
-def validate_case(case: MiniCase) -> None:
-    """Raise :class:`MiniSetError` if one case is not pipeline-consistent."""
+def is_test_subset(path: Path | str) -> bool:
+    """Return True when the sibling metadata marks this sample as ``test``.
+
+    The held-out test split uses candidate tools as gold answers by
+    construction, so the mini/dev guard against candidate gold must not apply
+    there. The stage comes from the materialized ``.meta.json``, never from the
+    row contents.
+    """
+
+    metadata_path = Path(path).with_suffix(".meta.json")
+    if not metadata_path.exists():
+        return False
+    try:
+        payload = json.loads(metadata_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("stage") == "test"
+
+
+def validate_case(
+    case: MiniCase,
+    *,
+    test_split: bool = False,
+) -> None:
+    """Raise :class:`MiniSetError` if one case is not pipeline-consistent.
+
+    ``test_split`` is used only for the materialized held-out sample. That
+    sample uses candidate tools as gold answers by construction, and its gold
+    arguments are not guaranteed to satisfy the dataset's own tool schema
+    (MATCH_SPEC §7 anticipates the inconsistency). Mini-set and dev cases
+    still reject candidate gold and require schema-valid gold.
+    """
 
     if not case.tool_definitions:
         if case.split != "mini":
@@ -222,7 +252,7 @@ def validate_case(case: MiniCase) -> None:
 
     gold_names = {call.name for call in gold}
     leaked = CANDIDATE_TOOLS.intersection(gold_names)
-    if leaked:
+    if leaked and not test_split:
         raise MiniSetError(
             f"{case.id}: gold answers name frozen held-out candidate tool(s): "
             f"{', '.join(sorted(leaked))}"
@@ -233,14 +263,18 @@ def validate_case(case: MiniCase) -> None:
             raise MiniSetError(
                 f"{case.id}: gold call names {call.name!r}, which is not offered"
             )
-        schema = _schema_for(case, call.name)
-        validator = Draft202012Validator(schema)
-        errors = sorted(validator.iter_errors(call.arguments), key=lambda e: list(e.path))
-        if errors:
-            detail = "; ".join(error.message for error in errors)
-            raise MiniSetError(
-                f"{case.id}: gold call to {call.name!r} violates its schema: {detail}"
+        if not test_split:
+            schema = _schema_for(case, call.name)
+            validator = Draft202012Validator(schema)
+            errors = sorted(
+                validator.iter_errors(call.arguments), key=lambda e: list(e.path)
             )
+            if errors:
+                detail = "; ".join(error.message for error in errors)
+                raise MiniSetError(
+                    f"{case.id}: gold call to {call.name!r} violates its schema: "
+                    f"{detail}"
+                )
 
     scored = score_case(_gold_blocks(gold), case.answers)
     if scored.exact != 1 or scored.partial != 1.0 or scored.format_failure:
@@ -250,20 +284,30 @@ def validate_case(case: MiniCase) -> None:
         )
 
 
-def validate_mini_set(cases: Iterable[MiniCase]) -> None:
+def validate_mini_set(
+    cases: Iterable[MiniCase],
+    *,
+    test_split: bool = False,
+) -> None:
     seen: set[str] = set()
     for case in cases:
         if case.id in seen:
             raise MiniSetError(f"duplicate case id: {case.id}")
         seen.add(case.id)
-        validate_case(case)
+        validate_case(case, test_split=test_split)
     if not seen:
         raise MiniSetError("mini-set is empty")
 
 
-def load_and_validate(path: Path | str = MINI_SET_PATH) -> list[MiniCase]:
+def load_and_validate(
+    path: Path | str = MINI_SET_PATH,
+    *,
+    test_split: bool | None = None,
+) -> list[MiniCase]:
     cases = load_cases(path)
-    validate_mini_set(cases)
+    if test_split is None:
+        test_split = is_test_subset(path)
+    validate_mini_set(cases, test_split=test_split)
     return cases
 
 
