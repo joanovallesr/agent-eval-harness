@@ -23,14 +23,6 @@ def test_kappa_threshold_constant():
     assert KAPPA_SHIP_THRESHOLD == 0.70
 
 
-@pytest.mark.skip(reason="Phase 5: implement cohens_kappa first")
-def test_cohens_kappa_perfect_agreement():
-    from eval.calibration import cohens_kappa
-
-    labels = ["correct", "wrong", "partial"] * 10
-    assert cohens_kappa(labels, labels) == pytest.approx(1.0)
-
-
 @pytest.mark.skip(reason="Phase 2: implement metrics first")
 def test_accuracy_ci_bounds():
     pass

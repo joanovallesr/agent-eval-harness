@@ -12,7 +12,7 @@ import pytest
 from agent.multistep_agent import MultiStepAgent, execute_fixture
 from agent.multistep_tools import TOOLS_BY_NAME
 from eval.config import MULTISTEP_EFFORT_BY_ARM
-from eval.labeling import PacketError, build_packet
+from eval.labeling import PacketError, build_packet, build_relabel_packet
 from eval.metrics import TokenPrice
 from eval.multistep import (
     dependency_count,
@@ -344,3 +344,72 @@ def test_packet_is_blind_and_deterministic(tmp_path):
             packet / "mapping.json",
             ROOT / "docs" / "MULTISTEP_RUBRIC.md",
         )
+
+
+def test_relabel_packet_is_balanced_and_blind(tmp_path):
+    packet = tmp_path / "packet"
+    packet.mkdir()
+    rows = []
+    mapping_rows = []
+    for index in range(30):
+        trace_id = f"trace-{index + 1:03d}"
+        rows.append(
+            {
+                "trace_id": trace_id,
+                "task_id": f"ms-{index + 1:03d}",
+                "query": "Do the task.",
+                "offered_tools": [],
+                "mock_results": [],
+                "success_criteria": "Done.",
+                "trace": {"steps": [], "final_answer": "done"},
+            }
+        )
+        mapping_rows.append(
+            {
+                "trace_id": trace_id,
+                "task_id": f"ms-{index + 1:03d}",
+                "arm": "haiku-agent" if index % 2 == 0 else "sonnet-agent",
+                "model_id": "claude-haiku-5-5" if index % 2 == 0 else "claude-sonnet-5-5",
+                "effort": "low" if index % 2 == 0 else "api_default",
+                "split": "report",
+            }
+        )
+    (packet / "traces.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+    )
+    mapping = tmp_path / "private" / "mapping.json"
+    mapping.parent.mkdir()
+    mapping.write_text(
+        json.dumps({"mapping": mapping_rows}), encoding="utf-8"
+    )
+    out = tmp_path / "relabel"
+    relabel_mapping = tmp_path / "private" / "relabel.json"
+    metadata = build_relabel_packet(
+        packet,
+        mapping,
+        out,
+        relabel_mapping,
+        ROOT / "docs" / "MULTISTEP_RUBRIC.md",
+        n_traces=15,
+        seed=7,
+    )
+    assert metadata["n_traces"] == 15
+    relabel_rows = [
+        json.loads(line)
+        for line in (out / "traces.jsonl").read_text().splitlines()
+    ]
+    assert len(relabel_rows) == 15
+    assert all(row["trace_id"].startswith("relabel-") for row in relabel_rows)
+    text = (out / "traces.jsonl").read_text()
+    for original in rows:
+        assert original["trace_id"] not in text
+    private = json.loads(relabel_mapping.read_text())
+    assert len(private["mapping"]) == 15
+    arms = [row["arm"] for row in private["mapping"]]
+    assert arms.count("haiku-agent") == 8
+    assert arms.count("sonnet-agent") == 7
+    for path in out.iterdir():
+        if path.is_file():
+            content = path.read_text(errors="replace").lower()
+            assert "haiku" not in content
+            assert "sonnet" not in content

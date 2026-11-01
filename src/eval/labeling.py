@@ -256,6 +256,131 @@ def build_packet(
     return metadata
 
 
+def build_relabel_packet(
+    packet_dir: Path | str,
+    mapping_path: Path | str,
+    out_dir: Path | str,
+    mapping_out: Path | str,
+    rubric_path: Path | str,
+    *,
+    n_traces: int = 15,
+    seed: int = 20261032,
+) -> dict[str, Any]:
+    """Build a separate blind batch of report traces for a relabel check."""
+
+    packet_dir = Path(packet_dir)
+    out_dir = Path(out_dir)
+    mapping_out = Path(mapping_out)
+    if out_dir.resolve() in mapping_out.resolve().parents or (
+        mapping_out.resolve() == out_dir.resolve()
+    ):
+        raise PacketError("the private relabel mapping must live outside the packet")
+
+    traces = {
+        str(row["trace_id"]): row
+        for row in _read_jsonl(packet_dir / "traces.jsonl")
+        if isinstance(row, dict) and row.get("trace_id")
+    }
+    payload = json.loads(Path(mapping_path).read_text())
+    rows = payload.get("mapping", payload)
+    report_rows = [
+        row
+        for row in rows
+        if isinstance(row, dict) and row.get("split") == "report"
+    ]
+    if len(report_rows) < n_traces:
+        raise PacketError("not enough report traces for the relabel batch")
+
+    by_arm: dict[str, list[dict[str, Any]]] = {}
+    for row in report_rows:
+        by_arm.setdefault(str(row.get("arm")), []).append(row)
+    rng = random.Random(seed)
+    arms = sorted(by_arm)
+    base = n_traces // len(arms)
+    extra = n_traces % len(arms)
+    selected: list[dict[str, Any]] = []
+    for index, arm in enumerate(arms):
+        count = base + (1 if index < extra else 0)
+        selected.extend(rng.sample(by_arm[arm], count))
+    rng.shuffle(selected)
+
+    relabel_rows: list[dict[str, Any]] = []
+    mapping_rows: list[dict[str, Any]] = []
+    for index, row in enumerate(selected, start=1):
+        original_id = str(row["trace_id"])
+        relabel_id = f"relabel-{index:03d}"
+        source = traces.get(original_id)
+        if source is None:
+            raise PacketError(f"report trace {original_id!r} is not in the packet")
+        relabel = dict(source)
+        relabel["trace_id"] = relabel_id
+        relabel_rows.append(relabel)
+        mapping_rows.append(
+            {
+                "trace_id": relabel_id,
+                "original_trace_id": original_id,
+                "task_id": row.get("task_id"),
+                "arm": row.get("arm"),
+                "model_id": row.get("model_id"),
+                "effort": row.get("effort"),
+                "split": row.get("split"),
+            }
+        )
+    _assert_blind(relabel_rows)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / "traces.jsonl").open("w", encoding="utf-8") as handle:
+        for row in relabel_rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+    with (out_dir / "labels.jsonl").open("w", encoding="utf-8") as handle:
+        for row in relabel_rows:
+            handle.write(
+                json.dumps(
+                    {"trace_id": row["trace_id"], "label": "", "notes": ""},
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+    shutil.copyfile(Path(rubric_path), out_dir / "RUBRIC.md")
+    (out_dir / "README.md").write_text(
+        "# Multi-step relabel batch\n\n"
+        "This is a separate blind batch drawn from the report half. It has no\n"
+        "model identity, arm name, cost or token count, judge output, and no\n"
+        "original trace id. Label every trace in `traces.jsonl` against\n"
+        "`RUBRIC.md` and write the label into the matching row of\n"
+        "`labels.jsonl`.\n\n"
+        "Allowed labels: `correct`, `partial`, `wrong`.\n",
+        encoding="utf-8",
+    )
+    metadata = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "n_traces": len(relabel_rows),
+        "seed": seed,
+        "rubric": Path(rubric_path).name,
+        "source": "report-half relabel batch",
+    }
+    (out_dir / "packet.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _assert_packet_dir_blind(out_dir)
+    mapping_out.parent.mkdir(parents=True, exist_ok=True)
+    mapping_out.write_text(
+        json.dumps(
+            {
+                "packet_dir": str(out_dir),
+                "seed": seed,
+                "mapping": mapping_rows,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return metadata
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the blind labeling packet")
     parser.add_argument("--run-dir", required=True)

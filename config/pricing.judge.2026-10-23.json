@@ -1,0 +1,13 @@
+{
+  "currency": "USD",
+  "unit": "per_MTok",
+  "pricing_basis": "list_sync",
+  "verified_date": "2026-10-23",
+  "source": "docs/EVAL_DESIGN.md section 2; OpenAI pricing page checked 2026-10-23",
+  "models": {
+    "gpt-6-luna": {
+      "input": 0.1,
+      "output": 0.5
+    }
+  }
+}
