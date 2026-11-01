@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 from phase6_report import (
@@ -306,7 +307,36 @@ def test_cost_verdict_is_the_pre_registered_binary_rule():
     assert cost_verdict(0.100001) == "parity fails"
 
 
-def test_build_and_render_use_one_results_json(tmp_path: Path):
+def _stub_git_bytes(
+    monkeypatch,
+    *,
+    tag: str | None,
+    available: bool = True,
+):
+    """Control all git access in build_analysis without touching the repo."""
+
+    def fake(*args: str) -> bytes:
+        if not available:
+            raise subprocess.CalledProcessError(128, ["git", *args])
+        if args == ("rev-parse", "HEAD"):
+            return b"deadbeef\n"
+        if args == ("rev-parse", "pre-registration-v1^{commit}"):
+            if tag is None:
+                raise subprocess.CalledProcessError(128, ["git", *args])
+            return f"{tag}\n".encode()
+        if args == ("rev-parse", "--show-toplevel"):
+            return f"{ROOT}\n".encode()
+        if args == (
+            "show",
+            "pre-registration-v1:docs/PRE_REGISTRATION.md",
+        ):
+            return (ROOT / "docs" / "PRE_REGISTRATION.md").read_bytes()
+        raise subprocess.CalledProcessError(128, ["git", *args])
+
+    monkeypatch.setattr("phase6_report._git_bytes", fake)
+
+
+def _analysis_inputs(tmp_path: Path) -> dict:
     cases, _ = _write_sample(tmp_path)
     run_dir = _write_run(tmp_path)
 
@@ -342,20 +372,31 @@ def test_build_and_render_use_one_results_json(tmp_path: Path):
             }
         )
     )
+    return {
+        "run_dir": run_dir,
+        "cases_path": cases,
+        "data_readme": data_readme,
+        "pre_registration": ROOT / "docs" / "PRE_REGISTRATION.md",
+        "budget_doc": ROOT / "docs" / "BUDGET.md",
+        "phase5_mapping": phase5_mapping,
+        "phase5_report_analysis": phase5_report,
+        "resamples": 50,
+        "seed": 42,
+    }
 
-    analysis = build_analysis(
-        run_dir=run_dir,
-        cases_path=cases,
-        data_readme=data_readme,
-        pre_registration=ROOT / "docs" / "PRE_REGISTRATION.md",
-        budget_doc=ROOT / "docs" / "BUDGET.md",
-        phase5_mapping=phase5_mapping,
-        phase5_report_analysis=phase5_report,
-        resamples=50,
-        seed=42,
+
+def test_build_and_render_use_one_results_json(tmp_path: Path, monkeypatch):
+    _stub_git_bytes(
+        monkeypatch, tag="cc8b79cf1bf5ca6f28b613957baaec50d54512fe"
     )
+    analysis = build_analysis(**_analysis_inputs(tmp_path))
     assert analysis["phase5"]["n_tasks"] == 1
     assert analysis["phase5"]["n_traces"] == 2
+    assert analysis["verification"]["pre_registration_tag_commit"] == (
+        "cc8b79cf1bf5ca6f28b613957baaec50d54512fe"
+    )
+    assert analysis["verification"]["pre_registration_identical"] is True
+    assert "git_verification_status" not in analysis["verification"]
 
     assert analysis["verification"]["sample_checksum_matches"] is True
     assert analysis["verification"]["metadata_checksum_matches"] is True
@@ -390,3 +431,38 @@ def test_build_and_render_use_one_results_json(tmp_path: Path):
     assert "The new ledger total is" in budget_text
     assert "| **test_spend** |" in budget_text
     assert "— | — | `C · n_t" not in budget_text
+
+
+def test_build_succeeds_when_tag_is_unavailable(tmp_path: Path, monkeypatch):
+    _stub_git_bytes(monkeypatch, tag=None)
+
+    analysis = build_analysis(**_analysis_inputs(tmp_path))
+
+    verification = analysis["verification"]
+    assert verification["git_verification_status"] == "unavailable"
+    assert verification["git_verification_error"]
+    # HEAD resolves in this path; only the tag-dependent fields are null.
+    assert verification["head_at_analysis"] == "deadbeef"
+    assert verification["pre_registration_tag_commit"] is None
+    assert verification["pre_registration_sha256_tag"] is None
+    assert verification["pre_registration_identical"] is None
+    assert verification["sample_checksum_matches"] is True
+    assert analysis["cost"]["verdict"] == "parity holds"
+
+    rendered = render_results(analysis)
+    assert "Git tag verification was unavailable" in rendered
+
+
+def test_build_succeeds_when_git_is_unavailable(tmp_path: Path, monkeypatch):
+    _stub_git_bytes(monkeypatch, tag=None, available=False)
+
+    analysis = build_analysis(**_analysis_inputs(tmp_path))
+
+    verification = analysis["verification"]
+    assert verification["git_verification_status"] == "unavailable"
+    assert verification["head_at_analysis"] is None
+    assert verification["pre_registration_tag_commit"] is None
+    assert verification["pre_registration_sha256_tag"] is None
+    assert verification["pre_registration_identical"] is None
+    assert verification["sample_checksum_matches"] is True
+    assert "Git tag verification was unavailable" in render_results(analysis)

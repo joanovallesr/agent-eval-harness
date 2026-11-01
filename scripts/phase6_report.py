@@ -342,10 +342,25 @@ def secondary_diagnostics_for_arm(
     }
 
 
-def _git(*args: str) -> str:
+def _git_bytes(*args: str) -> bytes:
+    """Raw git output. Tests stub this single helper to control git state."""
+
     return subprocess.check_output(
-        ["git", *args], text=True, stderr=subprocess.DEVNULL
-    ).strip()
+        ["git", *args], stderr=subprocess.DEVNULL
+    )
+
+
+def _git(*args: str) -> str:
+    return _git_bytes(*args).decode("utf-8").strip()
+
+
+def _try_git(*args: str) -> tuple[str | None, str | None]:
+    """Return ``(output, None)`` or ``(None, error)``; never raise."""
+
+    try:
+        return _git(*args), None
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, str(exc)
 
 
 def _verification(
@@ -366,18 +381,25 @@ def _verification(
         r"([0-9a-f]{64})  data/phase3/test\.meta\.json", recorded
     )
 
-    tag_commit = _git("rev-parse", "pre-registration-v1^{commit}")
-    head = _git("rev-parse", "HEAD")
+    tag_commit, tag_error = _try_git(
+        "rev-parse", "pre-registration-v1^{commit}"
+    )
+    head, head_error = _try_git("rev-parse", "HEAD")
     head_prereg = _sha256(pre_registration)
-    try:
-        repository = Path(_git("rev-parse", "--show-toplevel"))
-        relative = pre_registration.resolve().relative_to(repository).as_posix()
-        tagged_bytes = subprocess.check_output(
-            ["git", "show", f"pre-registration-v1:{relative}"]
-        )
-        tagged_prereg = hashlib.sha256(tagged_bytes).hexdigest()
-    except (OSError, subprocess.SubprocessError, ValueError):
-        tagged_prereg = None
+    tagged_prereg = None
+    tag_read_error = None
+    if tag_commit is not None:
+        try:
+            repository = Path(_git("rev-parse", "--show-toplevel"))
+            relative = pre_registration.resolve().relative_to(
+                repository
+            ).as_posix()
+            tagged_bytes = _git_bytes(
+                "show", f"pre-registration-v1:{relative}"
+            )
+            tagged_prereg = hashlib.sha256(tagged_bytes).hexdigest()
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            tag_read_error = str(exc)
 
     pre = pre_registration.read_text()
     budget = budget_doc.read_text()
@@ -405,12 +427,14 @@ def _verification(
     meta = json.loads(meta_path.read_text())
     pre_registered = set(meta.get("test_tools") or [])
 
-    return {
+    verification = {
         "head_at_analysis": head,
         "pre_registration_tag_commit": tag_commit,
         "pre_registration_sha256_head": head_prereg,
         "pre_registration_sha256_tag": tagged_prereg,
-        "pre_registration_identical": head_prereg == tagged_prereg,
+        "pre_registration_identical": (
+            head_prereg == tagged_prereg if tagged_prereg is not None else None
+        ),
         "sample_path": str(cases_path),
         "sample_sha256": sample_sha,
         "sample_sha256_recorded": expected_sample.group(1) if expected_sample else None,
@@ -440,6 +464,15 @@ def _verification(
             ),
         },
     }
+    if tag_commit is None or tagged_prereg is None:
+        verification["git_verification_status"] = "unavailable"
+        verification["git_verification_error"] = (
+            tag_error
+            or tag_read_error
+            or head_error
+            or "pre-registration tag unavailable"
+        )
+    return verification
 
 
 def _phase5_facts(mapping_path: Path, report_analysis_path: Path) -> dict[str, Any]:
@@ -764,17 +797,25 @@ def render_results(analysis: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append("## Pre-run verification")
     lines.append("")
-    lines.append(
-        f"- I verified that tag `pre-registration-v1` dereferences to "
-        f"`{verify['pre_registration_tag_commit']}`."
-    )
-    lines.append(
-        f"- I checked `docs/PRE_REGISTRATION.md` sha256 at the tag and at "
-        f"analysis time: "
-        f"`{verify['pre_registration_sha256_tag']}` / "
-        f"`{verify['pre_registration_sha256_head']}`; identical: "
-        f"**{verify['pre_registration_identical']}**."
-    )
+    if verify.get("git_verification_status") == "unavailable":
+        lines.append(
+            "- Git tag verification was unavailable in this environment; the "
+            "tag commit and tag-file hash are recorded as null. The "
+            "`docs/PRE_REGISTRATION.md` sha256 at analysis time is "
+            f"`{verify['pre_registration_sha256_head']}`."
+        )
+    else:
+        lines.append(
+            f"- I verified that tag `pre-registration-v1` dereferences to "
+            f"`{verify['pre_registration_tag_commit']}`."
+        )
+        lines.append(
+            f"- I checked `docs/PRE_REGISTRATION.md` sha256 at the tag and at "
+            f"analysis time: "
+            f"`{verify['pre_registration_sha256_tag']}` / "
+            f"`{verify['pre_registration_sha256_head']}`; identical: "
+            f"**{verify['pre_registration_identical']}**."
+        )
     lines.append(
         f"- I checked the test sample sha256 `{verify['sample_sha256']}` "
         f"(recorded match: "
