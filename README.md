@@ -95,7 +95,8 @@ agent-eval-harness/
 │   ├── audit_required_filter.py  # final required-args rule audit
 │   ├── audit_variance_m.py   # §7 m/u usable-cases sensitivity
 │   ├── sample_cases.py       # deterministic Phase-3 pilot/dev sampler
-│   └── phase6_report.py      # one-source Phase-6 analysis + doc generator
+│   ├── phase6_report.py      # one-source Phase-6 analysis + doc generator
+│   └── phase6_cache_monitor.py # real-time nonzero-cache stop guard
 ├── data/
 │   ├── miniset.jsonl # tracked hand-written Phase-2 smoke set (20 cases)
 │   ├── multistep.jsonl # tracked hand-written Phase-5 set (30 tasks)

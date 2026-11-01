@@ -9,9 +9,9 @@ from pathlib import Path
 from phase6_report import (
     END_MARKER,
     START_MARKER,
-    _diagnostics,
+    diagnostics_for_arm,
     has_nonzero_cache,
-    _secondary_diagnostics,
+    secondary_diagnostics_for_arm,
     build_analysis,
     classify_failure,
     cost_verdict,
@@ -272,7 +272,7 @@ def test_format_failure_rate_excludes_truncation():
             "raw_usage": {},
         },
     ]
-    diagnostics = _diagnostics(records)
+    diagnostics = diagnostics_for_arm(records)
     assert diagnostics["format_failure_count"] == 1
     assert diagnostics["truncation_count"] == 1
 
@@ -294,7 +294,7 @@ def test_secondary_diagnostics_include_name_only_and_lenient_variants():
             [{"name": "average", "arguments": {"x": "7"}}]
         )
     }
-    diagnostics = _secondary_diagnostics(records, answers)
+    diagnostics = secondary_diagnostics_for_arm(records, answers)
     assert diagnostics["partial"] == 0.5
     assert diagnostics["name_only"] == 1.0
     assert diagnostics["lenient_exact"] == 1.0

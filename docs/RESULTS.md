@@ -143,13 +143,12 @@ I assign exactly one descriptive label to every non-exact case. The counts sum t
 | `haiku-direct` | 0.85% (8) | 0.11% (1) | 0.00% (0) | 0 |
 | `sonnet-direct` | 0.32% (3) | 0.11% (1) | 0.00% (0) | 0 |
 
-The format-failure rate counts `no_tool_use`, `malformed_block`, and `schema_validation_after_retries`; truncation is a separate diagnostic and is not folded into it.
+The format-failure rate counts `no_tool_use`, `malformed_block`, and `schema_validation_after_retries`; truncation is a separate diagnostic and is not folded into it. The event breakdown below covers only the format-failure kinds, so its events sum to the format-failure count.
 
 | Format-failure event | haiku-agent | haiku-direct | sonnet-direct |
 |---|---:|---:|---:|
 | no_tool_use | 0 | 8 | 3 |
 | schema_validation_after_retries | 5 | 0 | 0 |
-| truncated | 1 | 1 | 1 |
 
 ## Phase 5 cross-reference
 

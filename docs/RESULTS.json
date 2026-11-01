@@ -484,7 +484,7 @@
     "tool_se": 0.03824897168263098
   },
   "run": {
-    "aborted_attempt_cost_usd": -3.1086244689504383e-15,
+    "aborted_attempt_cost_usd": 0.0,
     "aborted_records": 0,
     "arms": {
       "haiku-agent": {
@@ -602,7 +602,7 @@
     },
     "duplicate_case_ids": 0,
     "gold_tools_outside_pre_registered": [],
-    "head_at_analysis": "1fb6860c236e930baf2a53b762f7eb819888db6c",
+    "head_at_analysis": "2d91e753d7fa3b95bc1d8f5238704f51b7c759cc",
     "maximum_per_tool": 117,
     "metadata_checksum_matches": true,
     "metadata_sha256": "b64a5f99a8a54645aad2671a748c9047ac58fa892bf0b4e0d7c484c1689de7ae",

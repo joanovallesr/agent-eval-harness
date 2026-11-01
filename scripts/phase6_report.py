@@ -250,7 +250,7 @@ FORMAT_FAILURE_KINDS = {
 }
 
 
-def _diagnostics(
+def diagnostics_for_arm(
     records: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     n = len(records)
@@ -290,7 +290,7 @@ def _diagnostics(
     }
 
 
-def _secondary_diagnostics(
+def secondary_diagnostics_for_arm(
     records: Sequence[Mapping[str, Any]],
     answers_by_case: Mapping[str, str],
 ) -> dict[str, float]:
@@ -302,6 +302,13 @@ def _secondary_diagnostics(
     """
 
     n = len(records)
+    if n == 0:
+        return {
+            "partial": 0.0,
+            "name_only": 0.0,
+            "lenient_exact": 0.0,
+            "lenient_partial": 0.0,
+        }
     partial = sum(float(record.get("partial", 0.0)) for record in records) / n
     name_only = sum(1 for record in records if record.get("name_only")) / n
     lenient_exact = 0.0
@@ -526,9 +533,9 @@ def build_analysis(
     taxonomy = {
         arm: _taxonomy(records[arm], gold_names) for arm in ARMS
     }
-    diagnostics = {arm: _diagnostics(records[arm]) for arm in ARMS}
+    diagnostics = {arm: diagnostics_for_arm(records[arm]) for arm in ARMS}
     secondary_diagnostics = {
-        arm: _secondary_diagnostics(records[arm], gold_answers) for arm in ARMS
+        arm: secondary_diagnostics_for_arm(records[arm], gold_answers) for arm in ARMS
     }
     cache_nonzero = sum(
         diagnostics[arm]["cache_nonzero_records"] for arm in ARMS
@@ -549,7 +556,7 @@ def build_analysis(
     }
     arm_cases = {arm: len(records[arm]) for arm in ARMS}
     completed_arm_cost = sum(arm_totals.values())
-    aborted_attempt_cost = total_cost - completed_arm_cost
+    aborted_attempt_cost = max(0.0, round(total_cost - completed_arm_cost, 12))
     prompt_version = run.get("prompt_version")
     if not prompt_version:
         prompt_version = next(
@@ -1029,7 +1036,8 @@ def render_results(analysis: Mapping[str, Any]) -> str:
     lines.append(
         "The format-failure rate counts `no_tool_use`, `malformed_block`, and "
         "`schema_validation_after_retries`; truncation is a separate diagnostic "
-        "and is not folded into it."
+        "and is not folded into it. The event breakdown below covers only the "
+        "format-failure kinds, so its events sum to the format-failure count."
     )
     lines.append("")
     kinds = sorted(
@@ -1037,6 +1045,7 @@ def render_results(analysis: Mapping[str, Any]) -> str:
             kind
             for arm in ARMS
             for kind in analysis["diagnostics"][arm]["format_failure_kinds"]
+            if kind != "truncated"
         }
     )
     if kinds:
