@@ -23,7 +23,7 @@ portfolios skip. This project proves it:
 4. **CI gate** — offline checks required from day one; the LLM-backed gate
    starts advisory and is promoted once its false-alarm rate is measured.
 
-## Status: Phase 5 Part 1 complete; human labels pending; test run not started
+## Status: Phase 5 complete (judge calibration negative result); test run not started
 
 The mini-set, tool schemas, agent loop, direct arms, and harness are
 implemented and pass offline tests. The three-arm live smoke run completed on
@@ -54,9 +54,14 @@ cases (8 tools × 117). The test run itself is Phase 6 and has not started.
 Phase 5 Part 1 is complete: the 30-task hand-written multi-step set with
 scripted mock results is tracked in `data/multistep.jsonl`, and the final
 60-trace run (two loop arms, no direct arm) completed with no truncations,
-format failures, or fixture misses. Trace spend is **$1.287014** against the
-$1.50 Phase 5 ceiling; the blind human-labeling packet is in gitignored
-results storage. Part 2 (judge calibration) starts only after my labels exist.
+format failures, or fixture misses. Trace spend is **$1.287014**. Phase 5
+Part 2 is complete: I labeled all 60 traces blind, the judge agreed 30/30 on
+the tune half (no revision justified, prompt v1 frozen) and 30/30 on the
+report half. Both label sets used only `correct`, so Cohen's κ is undefined
+rather than large; the ship rule is a published negative result, with raw
+agreement 30/30 and n = 30 report traces (30 tasks). Judge spend is
+**$0.020836**; Phase 5 total is **$1.307851** against the $1.50 ceiling. See
+`docs/PHASE5_CALIBRATION.md`.
 
 ## Layout
 
@@ -99,6 +104,7 @@ agent-eval-harness/
 │   ├── BUDGET.md           # $20 ledger and ceilings
 │   ├── MULTISTEP_RUBRIC.md # Phase-5 blind labeling rubric (v1)
 │   ├── PHASE5_MULTISTEP.md # Phase-5 task set, traces, and packet
+│   ├── PHASE5_CALIBRATION.md # Phase-5 judge calibration and κ result
 │   └── FAILURE_TAXONOMY.md # descriptive diagnostics, not an exclusion list
 └── .github/workflows/ci.yml  # offline tests; LLM eval gate added in Phase 7
 ```

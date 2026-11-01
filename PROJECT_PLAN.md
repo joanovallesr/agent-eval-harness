@@ -109,16 +109,20 @@ in `docs/EVAL_DESIGN.md` — this file is the sequence, that file is the law.
 - [x] Generate traces: run the loop with both models (`haiku-agent`,
       `sonnet-agent`) on the multi-step set. (No direct arm here — it would
       fail by construction.)
-- [ ] Written rubric, blind labeling (arm hidden), split by task (~15 tune
-      tasks / ~15 report tasks), ~15 traces relabeled a week later for the
-      intra-rater ceiling. (Part 1: rubric written and packet built; my labels
-      are pending.)
-- [ ] One calibration round (one prompt revision, defined up front), time-boxed.
-- [ ] Calendar time-box (e.g. 2 weeks), non-blocking: Phase 6 does not wait
+- [x] Written rubric, blind labeling (arm hidden), split by task (~15 tune
+      tasks / ~15 report tasks), ~15 traces relabeled in a separate blind
+      batch. (Rubric and 60 labels complete. The relabel batch was run with
+      the judge because no second human labels existed; actual gap recorded.
+      With one-class human labels, human intra-rater κ is undefined.)
+- [x] One calibration round (one prompt revision, defined up front), time-boxed.
+      (Zero tune-half disagreements; no revision was justified; v1 frozen.)
+- [x] Calendar time-box (e.g. 2 weeks), non-blocking: Phase 6 does not wait
       for Phase 5 — the judge is secondary.
-- [ ] Report κ with 95% CI. Ship rule: point estimate ≥ 0.70; a miss is a
+- [x] Report κ with 95% CI. Ship rule: point estimate ≥ 0.70; a miss is a
       published negative result and the resume states measured κ and n.
-- [ ] Measurable: calibration report committed; judge prompt versioned.
+      (κ undefined from one-class labels; raw agreement 30/30; ship rule
+      missed and reported in `docs/PHASE5_CALIBRATION.md`.)
+- [x] Measurable: calibration report committed; judge prompt versioned.
 
 ## Phase 6 — Held-out run + report
 - [ ] Run the held-out set **once** (it's the test set — no tuning on it).

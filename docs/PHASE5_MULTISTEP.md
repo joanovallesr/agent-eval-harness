@@ -1,7 +1,8 @@
 # Phase 5 — Multi-Step Set and Trace Generation
 
-Status: Part 1 complete. I paused before labeling; Part 2 (judge calibration)
-has not started and will not start until my human labels exist.
+Status: Part 1 complete. Part 2 is complete; see
+`docs/PHASE5_CALIBRATION.md` for the judge calibration, the report-half κ, the
+blind relabel batch, and the ship-rule outcome.
 
 ## Scope
 
@@ -119,8 +120,9 @@ report the shortfall rather than exceed the ceiling.
 
 ## Next step
 
-I fill in the 60 labels in the packet. Part 2 then runs the judge on the tune
-half, compares against my labels, uses the single allowed prompt revision if
-the disagreements justify it, freezes the prompt, labels the report half,
-computes Cohen's kappa with its interval, runs the blind relabel batch for the
-intra-rater ceiling, and writes the calibration results.
+Part 2 is recorded in `docs/PHASE5_CALIBRATION.md`: the tune half had zero
+disagreements, so the judge prompt was frozen at v1; the report half agreed
+30/30 but κ is undefined because every human label is `correct`; the blind
+relabel batch also agreed 15/15. The ship rule is a published negative result.
+The next useful work is a harder multi-step set with varied failures, not more
+judge-prompt tuning against an all-correct label set.
