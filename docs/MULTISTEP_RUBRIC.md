@@ -1,9 +1,8 @@
 # Multi-Step Labeling Rubric
 
 Version: `phase5-rubric-v1` (written before any label). This rubric is used
-by me for the human labels and by the GPT-6 Luna judge in calibration. The
-judge sees the same task, mock results, success criteria, and trace, with no
-model identity.
+by me for the human labels and by the judge in calibration. The judge sees the
+same task, mock results, success criteria, and trace, with no model identity.
 
 ## What a label means
 

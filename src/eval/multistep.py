@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import uuid
 from dataclasses import dataclass
@@ -150,17 +151,26 @@ def _scalars(value: Any) -> list[Any]:
     return []
 
 
+def _token_in(needle: str, haystack: str) -> bool:
+    """Whole-token match, so ``14C`` does not count as a reference to ``1``."""
+
+    if needle == haystack:
+        return True
+    pattern = r"(?<![A-Za-z0-9])" + re.escape(needle) + r"(?![A-Za-z0-9])"
+    return re.search(pattern, haystack) is not None
+
+
 def _references(value: Any, haystack: Sequence[Any]) -> bool:
     for candidate in haystack:
         if value == candidate:
             return True
         if isinstance(value, str) and isinstance(candidate, str):
-            if len(candidate) >= 2 and candidate in value:
+            if len(candidate) >= 2 and _token_in(candidate, value):
                 return True
-            if len(value) >= 2 and value in candidate:
+            if len(value) >= 2 and _token_in(value, candidate):
                 return True
         if isinstance(value, str) and isinstance(candidate, (int, float)):
-            if str(candidate) in value:
+            if _token_in(str(candidate), value):
                 return True
     return False
 
@@ -377,7 +387,7 @@ def _percentile(values: Sequence[float], q: float) -> float:
     return ordered[low] + (ordered[high] - ordered[low]) * fraction
 
 
-def _arm_configs() -> list[dict[str, Any]]:
+def _arm_configs(arms: Sequence[str] | None = None) -> list[dict[str, Any]]:
     return [
         {
             "arm": arm,
@@ -385,7 +395,7 @@ def _arm_configs() -> list[dict[str, Any]]:
             "effort": multistep_effort_for(arm),
             "effort_transmitted": multistep_effort_for(arm) != "api_default",
         }
-        for arm in MULTISTEP_ARMS
+        for arm in (arms or MULTISTEP_ARMS)
     ]
 
 
@@ -503,7 +513,7 @@ def run_multistep(
             "max_steps": MULTISTEP_MAX_STEPS,
             "max_tokens": MULTISTEP_MAX_TOKENS,
             "selected_arms": selected_arms,
-            "arms": _arm_configs(),
+            "arms": _arm_configs(selected_arms),
             "case_ids": [case.id for case in cases],
             "resume_history": resume_history,
             "note": (
@@ -558,7 +568,7 @@ def run_multistep(
                     "max_steps": MULTISTEP_MAX_STEPS,
                     "max_tokens": MULTISTEP_MAX_TOKENS,
                     "selected_arms": selected_arms,
-                    "arms": _arm_configs(),
+                    "arms": _arm_configs(selected_arms),
                     "case_ids": [case.id for case in cases],
                 },
                 "arms": summaries,
@@ -595,7 +605,7 @@ def run_multistep(
                 "max_steps": MULTISTEP_MAX_STEPS,
                 "max_tokens": MULTISTEP_MAX_TOKENS,
                 "selected_arms": selected_arms,
-                "arms": _arm_configs(),
+                "arms": _arm_configs(selected_arms),
                 "case_ids": [case.id for case in cases],
                 "resume_history": resume_history,
             },
@@ -681,7 +691,7 @@ def run_multistep(
             "max_steps": MULTISTEP_MAX_STEPS,
             "max_tokens": MULTISTEP_MAX_TOKENS,
             "selected_arms": selected_arms,
-            "arms": _arm_configs(),
+            "arms": _arm_configs(selected_arms),
             "case_ids": [case.id for case in cases],
             "resume_history": resume_history,
         },

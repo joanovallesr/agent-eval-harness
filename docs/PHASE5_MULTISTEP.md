@@ -38,6 +38,7 @@ offered tool names, scripted fixtures, success criteria, and a note.
 The validator checks every fixture against its tool's JSON schema, rejects
 unknown or held-out candidate tools, requires at least two fixtures, and
 requires at least one later fixture argument to reference an earlier result.
+A two-call task has one dependency link: the second call depends on the first.
 It also enforces the 15/15 task split.
 
 The mock executor matches a call on a fixture's `match` block. Identifiers,
@@ -74,7 +75,11 @@ Final-run total: **$0.414715** for 60 traces. Diagnostics: 0 truncations,
 
 The first full pass surfaced fixture-matching defects on free-text fields.
 The task queries and success criteria did not change; I fixed the matcher and
-regenerated the traces so the committed code and the final traces agree.
+regenerated the traces. The final traces were generated from the working tree
+that became commits `71d0618` (task set) and `858268f` (loop and packet), so
+the run metadata records the parent commit `8b1e477` rather than a commit
+containing the loop code. The committed matcher code is the code that produced
+the final traces.
 
 | Run | Purpose | Cost |
 |---|---|---:|

@@ -251,6 +251,8 @@ def test_runner_writes_checkpoints_and_aggregates(tmp_path):
     summary = json.loads((run_dir / "summary.json").read_text())
     assert summary["arms"]["haiku-agent"]["n_completed"] == 1
     assert summary["arms"]["haiku-agent"]["input_tokens_total"] == 3000
+    run_meta = json.loads((run_dir / "run.json").read_text())
+    assert [row["arm"] for row in run_meta["arms"]] == ["haiku-agent"]
 
 
 def test_packet_is_blind_and_deterministic(tmp_path):
@@ -295,10 +297,16 @@ def test_packet_is_blind_and_deterministic(tmp_path):
     )
     assert metadata["n_traces"] == 2
     assert metadata["n_tasks"] == 2
+    assert "run_dir" not in metadata
     packet_text = (packet / "traces.jsonl").read_text().lower()
     assert "haiku" not in packet_text
     assert "sonnet" not in packet_text
     assert "claude-" not in packet_text
+    for path in packet.iterdir():
+        if path.is_file():
+            text = path.read_text(errors="replace").lower()
+            assert "gpt-6" not in text
+            assert "gpt6" not in text
     labels = [
         json.loads(line)
         for line in (packet / "labels.jsonl").read_text().splitlines()
@@ -311,6 +319,22 @@ def test_packet_is_blind_and_deterministic(tmp_path):
         "haiku-agent",
         "sonnet-agent",
     }
+
+    packet_again = tmp_path / "packet-again"
+    mapping_again = tmp_path / "private" / "mapping-again.json"
+    build_packet(
+        run_dir,
+        cases_path,
+        packet_again,
+        mapping_again,
+        ROOT / "docs" / "MULTISTEP_RUBRIC.md",
+    )
+    assert (packet / "traces.jsonl").read_text() == (
+        packet_again / "traces.jsonl"
+    ).read_text()
+    assert (packet / "labels.jsonl").read_text() == (
+        packet_again / "labels.jsonl"
+    ).read_text()
 
     with pytest.raises(PacketError):
         build_packet(

@@ -21,7 +21,6 @@ BLIND_FORBIDDEN = (
     "claude-",
     "gpt-6",
     "gpt6",
-    "judge",
 )
 
 
@@ -121,6 +120,20 @@ def _assert_blind(rows: Iterable[Mapping[str, Any]]) -> None:
             )
 
 
+def _assert_packet_dir_blind(packet_dir: Path) -> None:
+    """Check every packet file, not just the trace rows."""
+
+    for path in sorted(packet_dir.iterdir()):
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+        for token in BLIND_FORBIDDEN:
+            if token in text:
+                raise PacketError(
+                    f"packet file {path.name} would leak {token!r}"
+                )
+
+
 def build_packet(
     run_dir: Path | str,
     cases_path: Path | str,
@@ -218,13 +231,13 @@ def build_packet(
         "n_traces": len(packet_rows),
         "seed": seed,
         "rubric": Path(rubric_path).name,
-        "run_dir": str(run_dir),
         "n_tasks": len({row["task_id"] for row in packet_rows}),
     }
     (packet_dir / "packet.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    _assert_packet_dir_blind(packet_dir)
     mapping_path.parent.mkdir(parents=True, exist_ok=True)
     mapping_path.write_text(
         json.dumps(

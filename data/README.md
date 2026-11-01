@@ -1,10 +1,10 @@
 # Data
 
 Benchmark subsets live here. They are **gitignored** — large files and frozen
-splits shouldn't churn in the repo — with one explicit exception:
-`miniset.jsonl`, the hand-written Phase-2 smoke set, is tracked. What's
-committed otherwise: the revision pin, the checksums, and the license/terms
-verdict.
+splits shouldn't churn in the repo — with two explicit exceptions:
+`miniset.jsonl`, the hand-written Phase-2 smoke set, and `multistep.jsonl`,
+the hand-written Phase-5 set. Both are tracked. What's committed otherwise:
+the revision pin, the checksums, and the license/terms verdict.
 
 ## Sources
 
@@ -117,9 +117,12 @@ required-arguments heuristic gives a diagnostic 63-tool all-filter pool. All
 | `xlam60k_dev.jsonl` | dev tools — tune freely here |
 | `xlam60k_test_heldout.jsonl` | held-out tools — run once, no tuning |
 | `miniset.jsonl` | hand-written smoke tasks |
-| `multistep.jsonl` | hand-written multi-step tasks + mock tools |
-| `multistep_labels_tune.jsonl` | ~30 blind human labels (judge tuning) |
-| `multistep_labels_report.jsonl` | ~30 blind human labels (judge report — untouched until final) |
+| `multistep.jsonl` | hand-written multi-step tasks + scripted mock results |
+
+The blind multi-step labeling packet lives in the gitignored results tree
+(`results/phase5-labeling-<date>/packet/`), not here. It contains one
+`labels.jsonl` with 60 blank rows; the tune/report split is recorded in the
+private mapping and applied only after labeling.
 
 ## Phase 4 test sample (materialized 2026-10-31)
 
