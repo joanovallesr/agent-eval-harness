@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -24,3 +27,96 @@ jobs:
         run: ruff check src tests scripts
       - name: Run offline tests
         run: pytest -q
+
+  eval-gate:
+    # Advisory only: this job never fails the build. It depends on the test
+    # job so pytest failures still surface normally and separately.
+    if: github.event_name == 'pull_request'
+    needs: test
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      # Fork pull requests do not receive repository secrets. The gate checks
+      # presence only and never prints the value.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt
+      - name: Run advisory eval gate
+        id: gate
+        continue-on-error: true
+        run: |
+          PYTHONPATH=src:scripts python scripts/eval_gate.py \
+            --out results/ci-eval-gate \
+            --out-comment eval-gate-comment.md \
+            --baseline baselines/phase7-miniset-haiku-low.json \
+            --pricing-file config/pricing.list_sync.2026-10-31.json \
+            --cost-ceiling 0.25 \
+            --run-id "phase7-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Post or update the eval gate PR comment
+        if: always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          COMMENT_PATH: eval-gate-comment.md
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- phase7-eval-gate:comment -->';
+            let body;
+            try {
+              body = fs.readFileSync(process.env.COMMENT_PATH, 'utf8');
+            } catch (error) {
+              body = [
+                marker,
+                '',
+                '## Eval gate (advisory)',
+                '',
+                '**Result:** the eval gate did not produce a comment file.',
+                '',
+                'The build is unaffected because this gate is advisory. ' +
+                  'Check the `eval-gate` job log for the failure.',
+                '',
+                '_Scorer-based, mini-set only. No judge verdicts are used._',
+              ].join('\n');
+            }
+
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+              }
+            );
+            const existing = comments.find(
+              (comment) => (comment.body || '').includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }

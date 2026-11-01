@@ -1,0 +1,85 @@
+name: Eval gate comment
+
+# Fork pull requests get a read-only GITHUB_TOKEN in the `pull_request` run, so
+# that run cannot create a comment. This companion runs in the base
+# repository's write context and posts a fixed skip notice for forks. It never
+# checks out or executes pull-request code, and it never trusts PR-authored
+# text.
+#
+# Same-repository PRs are commented by the CI workflow itself.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0] &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the fixed fork skip notice
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        with:
+          script: |
+            const marker = '<!-- phase7-eval-gate:comment -->';
+            const body = [
+              marker,
+              '',
+              '## Eval gate (advisory)',
+              '',
+              '_Scorer-based, mini-set only. No judge verdicts are used. ' +
+                'This check never fails the build._',
+              '',
+              '**Result:** skipped.',
+              '',
+              '`ANTHROPIC_API_KEY` is not configured for fork pull requests. No ' +
+                'API calls were made and no cost was incurred.',
+              '',
+              'The eval gate runs only the tracked 20-case mini-set through ' +
+                '`haiku-agent` at effort `low`. It never runs the held-out test ' +
+                'split.',
+              '',
+              '---',
+              '_Advisory by design: this gate does not fail a build, and no ' +
+                'judge verdict is used anywhere._',
+            ].join('\n');
+
+            const issue_number = Number(process.env.PR_NUMBER);
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+              }
+            );
+            const existing = comments.find(
+              (comment) => (comment.body || '').includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }

@@ -1181,11 +1181,6 @@ def main() -> None:
         help="Sonnet-5.5 direct-prompt baseline only, no agent loop",
     )
     parser.add_argument(
-        "--gate",
-        action="store_true",
-        help="fail (exit 2) if below baselines/main.json",
-    )
-    parser.add_argument(
         "--arms",
         default="all",
         help="comma-separated arms, or 'all' (default: all)",
@@ -1323,8 +1318,6 @@ def main() -> None:
         parser.error(str(exc))
 
     print(json.dumps(result, indent=2))
-    if args.gate:
-        raise NotImplementedError("Phase 7: implement the CI gate comparison")
 
 
 if __name__ == "__main__":

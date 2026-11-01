@@ -1,0 +1,102 @@
+{
+  "arm": "haiku-agent",
+  "cases": {
+    "mini-001": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-002": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-003": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-004": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-005": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-006": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-007": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-008": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-009": {
+      "exact": 0.0,
+      "partial": 0.5
+    },
+    "mini-010": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-011": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-012": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-013": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-014": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-015": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-016": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-017": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-018": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-019": {
+      "exact": 1.0,
+      "partial": 1.0
+    },
+    "mini-020": {
+      "exact": 1.0,
+      "partial": 1.0
+    }
+  },
+  "cost_usd_total": 0.0033513,
+  "effort": "low",
+  "exact_match_mean": 0.95,
+  "generated_at": "2026-11-01T05:14:13.214542+00:00",
+  "git_commit": "1628869168e973508f1c6d565f52c5b55d6c56e6",
+  "match_spec_version": "1.1",
+  "max_tokens": 1024,
+  "miniset_path": "data/miniset.jsonl",
+  "miniset_sha256": "161912f04495c1ef75fdd48143e1e4b9f7b01a5cc00d46f3a26c7c3fb89b4c54",
+  "model_id": "claude-haiku-5-5",
+  "n_cases": 20,
+  "partial_mean": 0.975,
+  "pricing_basis": "list_sync",
+  "pricing_file": "config/pricing.list_sync.2026-10-31.json",
+  "prompt_version": "phase2-mini-v1",
+  "schema_version": 1,
+  "source_run_id": "phase7-baseline-20261101"
+}

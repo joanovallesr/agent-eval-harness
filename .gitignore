@@ -25,6 +25,8 @@ data/phase3/
 !data/multistep.jsonl
 baselines/*.json
 !baselines/.gitkeep
+# The Phase-7 advisory gate baseline is tracked on purpose.
+!baselines/phase7-miniset-haiku-low.json
 
 # Secrets
 .env
